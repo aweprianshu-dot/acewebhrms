@@ -1,0 +1,2887 @@
+{
+  "entities": {
+    "SystemSetup": {
+      "title": "SystemSetup",
+      "description": "Singleton bootstrap status preventing unauthorized duplicate Super Admin claims.",
+      "type": "object",
+      "properties": {
+        "initialized": {
+          "type": "boolean"
+        },
+        "superAdminUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "companyName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 120
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "initialized",
+        "superAdminUid",
+        "companyName",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "AdminRecord": {
+      "title": "AdminRecord",
+      "description": "Trusted Super Admin registry document.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 254
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "uid",
+        "email",
+        "createdAt"
+      ]
+    },
+    "RoleAssignment": {
+      "title": "RoleAssignment",
+      "description": "Authoritative RBAC role and department scope for a user.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 254
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "super_admin",
+            "hr_manager",
+            "dept_manager",
+            "team_lead",
+            "employee"
+          ]
+        },
+        "departmentId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "teamId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "teamLeadUid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "inviteId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "active",
+            "inactive",
+            "pending"
+          ]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "uid",
+        "email",
+        "role",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "UserAccount": {
+      "title": "UserAccount",
+      "description": "Authenticated user account profile.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "email": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 254
+        },
+        "photoURL": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "employeeId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "emailVerified": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "uid",
+        "displayName",
+        "email",
+        "emailVerified",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "DirectoryEntry": {
+      "title": "DirectoryEntry",
+      "description": "Non-PII public employee directory card for org visibility, birthdays, and anniversaries.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "uid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "employeeCode": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 32
+        },
+        "fullName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 120
+        },
+        "avatarUrl": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "departmentId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "departmentName": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "designation": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "joiningDate": {
+          "type": "string",
+          "maxLength": 20
+        },
+        "birthMonthDay": {
+          "type": "string",
+          "maxLength": 10
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "active",
+            "inactive",
+            "onboarding",
+            "offboarding"
+          ]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "employeeCode",
+        "fullName",
+        "departmentId",
+        "departmentName",
+        "designation",
+        "joiningDate",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "EmployeeProfile": {
+      "title": "EmployeeProfile",
+      "description": "Complete employee HR profile including contact PII.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "uid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "employeeCode": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 32
+        },
+        "fullName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 120
+        },
+        "avatarUrl": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "email": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 254
+        },
+        "phone": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "address": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "departmentId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "departmentName": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "designation": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "joiningDate": {
+          "type": "string",
+          "maxLength": 20
+        },
+        "birthDate": {
+          "type": "string",
+          "maxLength": 20
+        },
+        "birthdayOptOut": {
+          "type": "boolean"
+        },
+        "probationEndDate": {
+          "type": "string",
+          "maxLength": 10
+        },
+        "probationStatus": {
+          "type": "string",
+          "enum": [
+            "in_probation",
+            "confirmed",
+            "extended"
+          ]
+        },
+        "timezone": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "countryCode": {
+          "type": "string",
+          "maxLength": 3
+        },
+        "shiftStartTime": {
+          "type": "string",
+          "maxLength": 5
+        },
+        "shiftEndTime": {
+          "type": "string",
+          "maxLength": 5
+        },
+        "employmentType": {
+          "type": "string",
+          "enum": [
+            "full_time",
+            "part_time",
+            "contract",
+            "intern"
+          ]
+        },
+        "reportingManagerUid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "reportingManagerName": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "teamId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "teamName": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "teamLeadUid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "teamLeadName": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "emergencyContactName": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "emergencyContactPhone": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "emergencyContactRelation": {
+          "type": "string",
+          "maxLength": 60
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "active",
+            "inactive",
+            "onboarding",
+            "offboarding"
+          ]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "employeeCode",
+        "fullName",
+        "email",
+        "departmentId",
+        "departmentName",
+        "designation",
+        "joiningDate",
+        "employmentType",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "SalaryStructure": {
+      "title": "SalaryStructure",
+      "description": "Private employee compensation structure.",
+      "type": "object",
+      "properties": {
+        "employeeId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "uid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "currency": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 6
+        },
+        "basicSalary": {
+          "type": "number"
+        },
+        "hraAllowance": {
+          "type": "number"
+        },
+        "transportAllowance": {
+          "type": "number"
+        },
+        "specialAllowance": {
+          "type": "number"
+        },
+        "bonus": {
+          "type": "number"
+        },
+        "incentives": {
+          "type": "number"
+        },
+        "deductions": {
+          "type": "number"
+        },
+        "overtimeHourlyRate": {
+          "type": "number"
+        },
+        "effectiveFrom": {
+          "type": "string",
+          "maxLength": 20
+        },
+        "updatedByUid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "employeeId",
+        "currency",
+        "basicSalary",
+        "hraAllowance",
+        "transportAllowance",
+        "specialAllowance",
+        "bonus",
+        "incentives",
+        "deductions",
+        "overtimeHourlyRate",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Invitation": {
+      "title": "Invitation",
+      "description": "HR-issued employee invitation binding verified email to role and department.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 254
+        },
+        "fullName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 120
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "hr_manager",
+            "dept_manager",
+            "team_lead",
+            "employee"
+          ]
+        },
+        "departmentId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "departmentName": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "designation": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "employeeId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "invitedByUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "accepted",
+            "revoked"
+          ]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "email",
+        "fullName",
+        "role",
+        "departmentId",
+        "departmentName",
+        "designation",
+        "invitedByUid",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Department": {
+      "title": "Department",
+      "description": "Company department definition.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 120
+        },
+        "code": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 20
+        },
+        "headUid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "headName": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "countryCode": {
+          "type": "string",
+          "maxLength": 3
+        },
+        "location": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "code",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Designation": {
+      "title": "Designation",
+      "description": "Job title / designation catalog.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 120
+        },
+        "departmentId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "level": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "AttendanceRecord": {
+      "title": "AttendanceRecord",
+      "description": "Daily employee attendance record keyed by uid_YYYY-MM-DD.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "employeeId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "employeeName": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "departmentId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "date": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 10
+        },
+        "checkInTime": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "checkOutTime": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "lunchStartTime": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "lunchEndTime": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "actualLunchMinutes": {
+          "type": "number"
+        },
+        "breakMinutes": {
+          "type": "number"
+        },
+        "workingMinutes": {
+          "type": "number"
+        },
+        "lateMinutes": {
+          "type": "number"
+        },
+        "earlyDepartureMinutes": {
+          "type": "number"
+        },
+        "officeTimezone": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "present",
+            "late",
+            "half_day",
+            "early_departure",
+            "absent",
+            "weekly_off",
+            "holiday"
+          ]
+        },
+        "isLate": {
+          "type": "boolean"
+        },
+        "isEarlyDeparture": {
+          "type": "boolean"
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "uid",
+        "employeeId",
+        "employeeName",
+        "departmentId",
+        "date",
+        "status",
+        "breakMinutes",
+        "workingMinutes",
+        "isLate",
+        "isEarlyDeparture",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "AttendanceCorrection": {
+      "title": "AttendanceCorrection",
+      "description": "Employee request to correct an attendance timestamp or status.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "attendanceId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "employeeId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "employeeName": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "departmentId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "date": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 10
+        },
+        "requestedCheckIn": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "requestedCheckOut": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "requestedBreakMinutes": {
+          "type": "number"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 500
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "approved",
+            "rejected"
+          ]
+        },
+        "reviewedByUid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "reviewNotes": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "uid",
+        "employeeId",
+        "employeeName",
+        "departmentId",
+        "date",
+        "requestedCheckIn",
+        "reason",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Holiday": {
+      "title": "Holiday",
+      "description": "Company holiday calendar entry.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 120
+        },
+        "date": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 10
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "public",
+            "company",
+            "optional"
+          ]
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "countryCode": {
+          "type": "string",
+          "maxLength": 3
+        },
+        "location": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "date",
+        "type",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "LeaveBalance": {
+      "title": "LeaveBalance",
+      "description": "Annual leave quota and usage per employee.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "employeeId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "departmentId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "teamId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "teamLeadUid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "reportingManagerUid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "ownerRole": {
+          "type": "string",
+          "enum": [
+            "super_admin",
+            "hr_manager",
+            "dept_manager",
+            "team_lead",
+            "employee"
+          ]
+        },
+        "year": {
+          "type": "number"
+        },
+        "casualTotal": {
+          "type": "number"
+        },
+        "casualUsed": {
+          "type": "number"
+        },
+        "sickTotal": {
+          "type": "number"
+        },
+        "sickUsed": {
+          "type": "number"
+        },
+        "paidTotal": {
+          "type": "number"
+        },
+        "paidUsed": {
+          "type": "number"
+        },
+        "emergencyTotal": {
+          "type": "number"
+        },
+        "emergencyUsed": {
+          "type": "number"
+        },
+        "unpaidUsed": {
+          "type": "number"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "uid",
+        "year",
+        "casualTotal",
+        "casualUsed",
+        "sickTotal",
+        "sickUsed",
+        "paidTotal",
+        "paidUsed",
+        "emergencyTotal",
+        "emergencyUsed",
+        "unpaidUsed",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "LeaveRequest": {
+      "title": "LeaveRequest",
+      "description": "Employee leave application and approval workflow.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "employeeId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "employeeName": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "departmentId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "teamId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "teamName": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "teamLeadUid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "reportingManagerUid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "requesterRole": {
+          "type": "string",
+          "enum": [
+            "super_admin",
+            "hr_manager",
+            "dept_manager",
+            "team_lead",
+            "employee"
+          ]
+        },
+        "leaveType": {
+          "type": "string",
+          "enum": [
+            "casual",
+            "sick",
+            "paid",
+            "unpaid",
+            "emergency",
+            "short"
+          ]
+        },
+        "startDate": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 10
+        },
+        "endDate": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 10
+        },
+        "daysCount": {
+          "type": "number"
+        },
+        "dayPart": {
+          "type": "string",
+          "enum": [
+            "full",
+            "first_half",
+            "second_half",
+            "short"
+          ]
+        },
+        "shortLeaveHours": {
+          "type": "number"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 500
+        },
+        "attachmentUrl": {
+          "type": "string",
+          "maxLength": 1500
+        },
+        "attachmentName": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "changes_requested",
+            "approved",
+            "rejected",
+            "cancelled"
+          ]
+        },
+        "reviewedByUid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "reviewerName": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "reviewComment": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "resubmittedAt": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "cancelledByUid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "cancelledReason": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "uid",
+        "employeeId",
+        "employeeName",
+        "departmentId",
+        "leaveType",
+        "startDate",
+        "endDate",
+        "daysCount",
+        "reason",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "PayrollRun": {
+      "title": "PayrollRun",
+      "description": "Monthly payroll processing batch record.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "month": {
+          "type": "string",
+          "minLength": 7,
+          "maxLength": 7
+        },
+        "currency": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 6
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "draft",
+            "processed",
+            "finalized"
+          ]
+        },
+        "totalGross": {
+          "type": "number"
+        },
+        "totalDeductions": {
+          "type": "number"
+        },
+        "totalNet": {
+          "type": "number"
+        },
+        "employeeCount": {
+          "type": "number"
+        },
+        "processedByUid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "month",
+        "currency",
+        "status",
+        "totalGross",
+        "totalDeductions",
+        "totalNet",
+        "employeeCount",
+        "processedByUid",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Payslip": {
+      "title": "Payslip",
+      "description": "Individual employee monthly payslip.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "runId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "month": {
+          "type": "string",
+          "minLength": 7,
+          "maxLength": 7
+        },
+        "uid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "employeeId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "employeeCode": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "employeeName": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "departmentId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "departmentName": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "designation": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "currency": {
+          "type": "string",
+          "maxLength": 6
+        },
+        "basicSalary": {
+          "type": "number"
+        },
+        "allowances": {
+          "type": "number"
+        },
+        "bonuses": {
+          "type": "number"
+        },
+        "incentives": {
+          "type": "number"
+        },
+        "overtimePay": {
+          "type": "number"
+        },
+        "overtimeHours": {
+          "type": "number"
+        },
+        "unpaidLeaveDays": {
+          "type": "number"
+        },
+        "unpaidLeaveDeduction": {
+          "type": "number"
+        },
+        "otherDeductions": {
+          "type": "number"
+        },
+        "grossPay": {
+          "type": "number"
+        },
+        "netPay": {
+          "type": "number"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "generated",
+            "issued"
+          ]
+        },
+        "paymentNote": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "runId",
+        "month",
+        "employeeId",
+        "employeeName",
+        "currency",
+        "basicSalary",
+        "allowances",
+        "bonuses",
+        "incentives",
+        "overtimePay",
+        "unpaidLeaveDeduction",
+        "otherDeductions",
+        "grossPay",
+        "netPay",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "JobOpening": {
+      "title": "JobOpening",
+      "description": "Recruitment job requisition.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 120
+        },
+        "departmentId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "departmentName": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "location": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "employmentType": {
+          "type": "string",
+          "enum": [
+            "full_time",
+            "part_time",
+            "contract",
+            "intern"
+          ]
+        },
+        "openings": {
+          "type": "number"
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "requirements": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "open",
+            "paused",
+            "closed"
+          ]
+        },
+        "createdByUid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "departmentId",
+        "departmentName",
+        "employmentType",
+        "openings",
+        "status",
+        "createdByUid",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Candidate": {
+      "title": "Candidate",
+      "description": "Recruitment candidate profile and interview pipeline.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "jobId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "jobTitle": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "fullName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 120
+        },
+        "email": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 254
+        },
+        "phone": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "resumeUrl": {
+          "type": "string",
+          "maxLength": 1500
+        },
+        "resumeName": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "stage": {
+          "type": "string",
+          "enum": [
+            "applied",
+            "screening",
+            "interview",
+            "offer",
+            "selected",
+            "rejected"
+          ]
+        },
+        "interviewDate": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "interviewerUid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "interviewerName": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "interviewFeedback": {
+          "type": "string",
+          "maxLength": 1500
+        },
+        "rating": {
+          "type": "number"
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 1500
+        },
+        "createdByUid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "jobId",
+        "jobTitle",
+        "fullName",
+        "email",
+        "stage",
+        "createdByUid",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "OnboardingCase": {
+      "title": "OnboardingCase",
+      "description": "New employee onboarding checklist, offer letter, and verification tracking.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "uid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "employeeId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "employeeName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 120
+        },
+        "email": {
+          "type": "string",
+          "maxLength": 254
+        },
+        "departmentId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "departmentName": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "designation": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "offerLetterUrl": {
+          "type": "string",
+          "maxLength": 1500
+        },
+        "offerLetterStatus": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "sent",
+            "signed"
+          ]
+        },
+        "policyAcknowledged": {
+          "type": "boolean"
+        },
+        "documentsVerified": {
+          "type": "boolean"
+        },
+        "accountCreated": {
+          "type": "boolean"
+        },
+        "trainingChecklist": {
+          "type": "array"
+        },
+        "progressPercent": {
+          "type": "number"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "in_progress",
+            "completed"
+          ]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "employeeId",
+        "employeeName",
+        "email",
+        "departmentId",
+        "departmentName",
+        "designation",
+        "offerLetterStatus",
+        "policyAcknowledged",
+        "documentsVerified",
+        "accountCreated",
+        "trainingChecklist",
+        "progressPercent",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "OffboardingCase": {
+      "title": "OffboardingCase",
+      "description": "Resignation, notice period, asset return, clearance, and final settlement.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "employeeId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "employeeName": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "departmentId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "resignationDate": {
+          "type": "string",
+          "maxLength": 20
+        },
+        "lastWorkingDay": {
+          "type": "string",
+          "maxLength": 20
+        },
+        "noticePeriodDays": {
+          "type": "number"
+        },
+        "reason": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "approvalStatus": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "approved",
+            "rejected"
+          ]
+        },
+        "approvedByUid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "exitInterviewCompleted": {
+          "type": "boolean"
+        },
+        "exitInterviewNotes": {
+          "type": "string",
+          "maxLength": 1500
+        },
+        "assetsReturned": {
+          "type": "boolean"
+        },
+        "documentsCleared": {
+          "type": "boolean"
+        },
+        "finalSettlementAmount": {
+          "type": "number"
+        },
+        "finalSettlementStatus": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "calculated",
+            "settled"
+          ]
+        },
+        "accountDeactivated": {
+          "type": "boolean"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "initiated",
+            "in_progress",
+            "completed"
+          ]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "uid",
+        "employeeId",
+        "employeeName",
+        "departmentId",
+        "resignationDate",
+        "lastWorkingDay",
+        "noticePeriodDays",
+        "reason",
+        "approvalStatus",
+        "exitInterviewCompleted",
+        "assetsReturned",
+        "documentsCleared",
+        "finalSettlementAmount",
+        "finalSettlementStatus",
+        "accountDeactivated",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "PerformanceGoal": {
+      "title": "PerformanceGoal",
+      "description": "Employee goal and objective tracking.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "employeeId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "employeeName": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "departmentId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "title": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 200
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "targetDate": {
+          "type": "string",
+          "maxLength": 20
+        },
+        "progress": {
+          "type": "number"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "not_started",
+            "in_progress",
+            "completed"
+          ]
+        },
+        "createdByUid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "uid",
+        "employeeId",
+        "employeeName",
+        "departmentId",
+        "title",
+        "targetDate",
+        "progress",
+        "status",
+        "createdByUid",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "PerformanceReview": {
+      "title": "PerformanceReview",
+      "description": "Monthly performance evaluation, rating, and feedback.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "employeeId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "employeeName": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "departmentId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "reviewerUid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "reviewerName": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "reviewPeriod": {
+          "type": "string",
+          "minLength": 7,
+          "maxLength": 7
+        },
+        "rating": {
+          "type": "number"
+        },
+        "productivityScore": {
+          "type": "number"
+        },
+        "achievements": {
+          "type": "string",
+          "maxLength": 1500
+        },
+        "feedback": {
+          "type": "string",
+          "maxLength": 1500
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "draft",
+            "submitted",
+            "acknowledged"
+          ]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "uid",
+        "employeeId",
+        "employeeName",
+        "departmentId",
+        "reviewerUid",
+        "reviewerName",
+        "reviewPeriod",
+        "rating",
+        "productivityScore",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Announcement": {
+      "title": "Announcement",
+      "description": "Company-wide announcements, policy notices, and events.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 160
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "notice",
+            "holiday",
+            "birthday",
+            "anniversary",
+            "event",
+            "policy"
+          ]
+        },
+        "content": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 4000
+        },
+        "pinned": {
+          "type": "boolean"
+        },
+        "audience": {
+          "type": "string",
+          "enum": [
+            "company",
+            "department",
+            "team"
+          ]
+        },
+        "departmentId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "teamId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "teamName": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "teamLeadUid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "publishDate": {
+          "type": "string",
+          "maxLength": 16
+        },
+        "expiryDate": {
+          "type": "string",
+          "maxLength": 16
+        },
+        "authorUid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "authorName": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "authorRole": {
+          "type": "string",
+          "enum": [
+            "super_admin",
+            "hr_manager",
+            "dept_manager",
+            "team_lead",
+            "employee"
+          ]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "category",
+        "content",
+        "pinned",
+        "authorUid",
+        "authorName",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "EmployeeDocument": {
+      "title": "EmployeeDocument",
+      "description": "Private employee document metadata referencing secure Firebase Storage.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "employeeId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "title": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 160
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "id_proof",
+            "contract",
+            "offer_letter",
+            "certificate",
+            "policy",
+            "other"
+          ]
+        },
+        "fileUrl": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1500
+        },
+        "fileName": {
+          "type": "string",
+          "maxLength": 255
+        },
+        "fileSize": {
+          "type": "number"
+        },
+        "verified": {
+          "type": "boolean"
+        },
+        "verifiedByUid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "uploadedByUid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "uid",
+        "employeeId",
+        "title",
+        "category",
+        "fileUrl",
+        "fileName",
+        "fileSize",
+        "verified",
+        "uploadedByUid",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "In-app and email notification entry for a recipient user.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "recipientUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "title": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 160
+        },
+        "message": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 1000
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "leave",
+            "attendance",
+            "payroll",
+            "announcement",
+            "document",
+            "performance",
+            "task",
+            "system"
+          ]
+        },
+        "linkTab": {
+          "type": "string",
+          "maxLength": 60
+        },
+        "read": {
+          "type": "boolean"
+        },
+        "emailSent": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "taskId": {
+          "type": "string",
+          "maxLength": 128
+        }
+      },
+      "required": [
+        "id",
+        "recipientUid",
+        "title",
+        "message",
+        "type",
+        "read",
+        "emailSent",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "NotificationPreference": {
+      "title": "NotificationPreference",
+      "description": "User notification delivery preferences and FCM token.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "emailLeaveUpdates": {
+          "type": "boolean"
+        },
+        "emailPayroll": {
+          "type": "boolean"
+        },
+        "emailAnnouncements": {
+          "type": "boolean"
+        },
+        "emailPerformance": {
+          "type": "boolean"
+        },
+        "pushEnabled": {
+          "type": "boolean"
+        },
+        "fcmToken": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "uid",
+        "emailLeaveUpdates",
+        "emailPayroll",
+        "emailAnnouncements",
+        "emailPerformance",
+        "pushEnabled",
+        "updatedAt"
+      ]
+    },
+    "HrSetting": {
+      "title": "HrSetting",
+      "description": "Company, attendance, payroll, and leave configuration documents.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "updatedByUid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "superAdminSelfApprovalMode": {
+          "type": "string",
+          "enum": [
+            "auto_audit",
+            "designated_approver"
+          ]
+        },
+        "superAdminApproverUid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "updatedAt"
+      ]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Immutable HR security and administrative audit log.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "actorUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "actorEmail": {
+          "type": "string",
+          "maxLength": 254
+        },
+        "actorRole": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "action": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 120
+        },
+        "targetCollection": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "targetId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "summary": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "actorUid",
+        "actorEmail",
+        "actorRole",
+        "action",
+        "targetCollection",
+        "targetId",
+        "summary",
+        "createdAt"
+      ]
+    },
+    "Task": {
+      "title": "Task",
+      "description": "Work item assigned to an employee by an administrator, HR manager or department manager.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 140
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "assigneeUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "assigneeName": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "assigneeEmployeeId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "departmentId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "assignedByUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "assignedByName": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "priority": {
+          "type": "string",
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "urgent"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "todo",
+            "in_progress",
+            "review",
+            "completed"
+          ]
+        },
+        "dueDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "completionNote": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "completedAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "project": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "clientName": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "timerRunning": {
+          "type": "boolean"
+        },
+        "timerStartedAt": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "activeTimerUid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "trackedSeconds": {
+          "type": "number"
+        },
+        "comments": {
+          "type": "array"
+        },
+        "attachments": {
+          "type": "array"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "description",
+        "assigneeUid",
+        "assigneeName",
+        "assigneeEmployeeId",
+        "departmentId",
+        "assignedByUid",
+        "assignedByName",
+        "priority",
+        "status",
+        "dueDate",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "BackupRecord": {
+      "title": "BackupRecord",
+      "type": "object",
+      "description": "Immutable Super Admin backup record with SHA-256 integrity checksum and collection counts.",
+      "properties": {
+        "id": { "type": "string" },
+        "trigger": { "type": "string", "enum": ["scheduled", "manual"] },
+        "frequency": { "type": "string", "enum": ["hourly", "daily", "weekly"] },
+        "status": { "type": "string", "enum": ["success", "failed"] },
+        "checksumSha256": { "type": "string" },
+        "storagePath": { "type": "string" },
+        "storageFileCount": { "type": "number" },
+        "totalRecords": { "type": "number" },
+        "sizeBytes": { "type": "number" },
+        "collectionCounts": { "type": "object" },
+        "snapshotJson": { "type": "string" },
+        "errorMessage": { "type": "string" },
+        "createdByUid": { "type": "string" },
+        "createdByEmail": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "id",
+        "trigger",
+        "frequency",
+        "status",
+        "checksumSha256",
+        "storagePath",
+        "storageFileCount",
+        "totalRecords",
+        "sizeBytes",
+        "collectionCounts",
+        "createdByUid",
+        "createdByEmail",
+        "createdAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/system/{docId}": {
+      "schema": {
+        "$ref": "#/entities/SystemSetup"
+      },
+      "description": "Singleton bootstrap document."
+    },
+    "/admins/{uid}": {
+      "schema": {
+        "$ref": "#/entities/AdminRecord"
+      },
+      "description": "Super Admin registry."
+    },
+    "/roles/{uid}": {
+      "schema": {
+        "$ref": "#/entities/RoleAssignment"
+      },
+      "description": "Authoritative user RBAC role."
+    },
+    "/users/{uid}": {
+      "schema": {
+        "$ref": "#/entities/UserAccount"
+      },
+      "description": "Authenticated user account metadata."
+    },
+    "/directory/{employeeId}": {
+      "schema": {
+        "$ref": "#/entities/DirectoryEntry"
+      },
+      "description": "Non-PII company directory."
+    },
+    "/employees/{employeeId}": {
+      "schema": {
+        "$ref": "#/entities/EmployeeProfile"
+      },
+      "description": "Private employee HR profile with PII."
+    },
+    "/salaries/{employeeId}": {
+      "schema": {
+        "$ref": "#/entities/SalaryStructure"
+      },
+      "description": "Private employee salary structure."
+    },
+    "/invitations/{inviteId}": {
+      "schema": {
+        "$ref": "#/entities/Invitation"
+      },
+      "description": "Employee onboarding invitations."
+    },
+    "/departments/{departmentId}": {
+      "schema": {
+        "$ref": "#/entities/Department"
+      },
+      "description": "Company departments."
+    },
+    "/designations/{designationId}": {
+      "schema": {
+        "$ref": "#/entities/Designation"
+      },
+      "description": "Company designations."
+    },
+    "/attendance/{attendanceId}": {
+      "schema": {
+        "$ref": "#/entities/AttendanceRecord"
+      },
+      "description": "Daily attendance logs."
+    },
+    "/attendanceCorrections/{correctionId}": {
+      "schema": {
+        "$ref": "#/entities/AttendanceCorrection"
+      },
+      "description": "Attendance correction requests."
+    },
+    "/holidays/{holidayId}": {
+      "schema": {
+        "$ref": "#/entities/Holiday"
+      },
+      "description": "Company holidays."
+    },
+    "/leaveBalances/{uid}": {
+      "schema": {
+        "$ref": "#/entities/LeaveBalance"
+      },
+      "description": "Employee leave balances."
+    },
+    "/leaveRequests/{leaveId}": {
+      "schema": {
+        "$ref": "#/entities/LeaveRequest"
+      },
+      "description": "Employee leave requests."
+    },
+    "/payrollRuns/{runId}": {
+      "schema": {
+        "$ref": "#/entities/PayrollRun"
+      },
+      "description": "Monthly payroll batches."
+    },
+    "/payslips/{payslipId}": {
+      "schema": {
+        "$ref": "#/entities/Payslip"
+      },
+      "description": "Private employee payslips."
+    },
+    "/jobs/{jobId}": {
+      "schema": {
+        "$ref": "#/entities/JobOpening"
+      },
+      "description": "Recruitment job openings."
+    },
+    "/candidates/{candidateId}": {
+      "schema": {
+        "$ref": "#/entities/Candidate"
+      },
+      "description": "Recruitment candidates."
+    },
+    "/onboarding/{onboardingId}": {
+      "schema": {
+        "$ref": "#/entities/OnboardingCase"
+      },
+      "description": "Onboarding checklists."
+    },
+    "/offboarding/{offboardingId}": {
+      "schema": {
+        "$ref": "#/entities/OffboardingCase"
+      },
+      "description": "Offboarding and exit records."
+    },
+    "/goals/{goalId}": {
+      "schema": {
+        "$ref": "#/entities/PerformanceGoal"
+      },
+      "description": "Employee performance goals."
+    },
+    "/reviews/{reviewId}": {
+      "schema": {
+        "$ref": "#/entities/PerformanceReview"
+      },
+      "description": "Performance reviews."
+    },
+    "/announcements/{announcementId}": {
+      "schema": {
+        "$ref": "#/entities/Announcement"
+      },
+      "description": "Company announcements."
+    },
+    "/documents/{docId}": {
+      "schema": {
+        "$ref": "#/entities/EmployeeDocument"
+      },
+      "description": "Private employee documents."
+    },
+    "/notifications/{notificationId}": {
+      "schema": {
+        "$ref": "#/entities/Notification"
+      },
+      "description": "User notifications."
+    },
+    "/notificationPrefs/{uid}": {
+      "schema": {
+        "$ref": "#/entities/NotificationPreference"
+      },
+      "description": "User notification preferences."
+    },
+    "/settings/{settingId}": {
+      "schema": {
+        "$ref": "#/entities/HrSetting"
+      },
+      "description": "HR configuration documents."
+    },
+    "/auditLogs/{logId}": {
+      "schema": {
+        "$ref": "#/entities/AuditLog"
+      },
+      "description": "Immutable audit logs."
+    },
+    "/tasks/{taskId}": {
+      "schema": {
+        "$ref": "#/entities/Task"
+      },
+      "description": "Tasks assigned to employees with department-scoped manager access and task status notifications."
+    },
+    "/breakSessions/{breakId}": {
+      "schema": {
+        "type": "object"
+      },
+      "description": "Recorded employee break intervals with manager visibility and auto-end review flags."
+    },
+    "/dailyWorkReports/{reportId}": {
+      "schema": {
+        "type": "object"
+      },
+      "description": "Daily employee work reports with TL/HR approval, comments and resubmission."
+    },
+    "/meetingLogs/{meetingId}": {
+      "schema": {
+        "type": "object"
+      },
+      "description": "Employee meeting time logs with manager confirmation."
+    },
+    "/wfhRequests/{requestId}": {
+      "schema": {
+        "type": "object"
+      },
+      "description": "Work-from-home requests and manager approvals."
+    },
+    "/overtimeRequests/{requestId}": {
+      "schema": {
+        "type": "object"
+      },
+      "description": "Overtime and comp-off request records."
+    },
+    "/timesheets/{timesheetId}": {
+      "schema": {
+        "type": "object"
+      },
+      "description": "Project/client time entries and manager review."
+    },
+    "/expenseClaims/{claimId}": {
+      "schema": {
+        "type": "object"
+      },
+      "description": "Employee expense and reimbursement claims."
+    },
+    "/assets/{assetId}": {
+      "schema": {
+        "type": "object"
+      },
+      "description": "Company asset inventory and employee assignments."
+    },
+    "/helpdeskTickets/{ticketId}": {
+      "schema": {
+        "type": "object"
+      },
+      "description": "Employee HR and IT helpdesk tickets."
+    },
+    "/polls/{pollId}": {
+      "schema": {
+        "type": "object"
+      },
+      "description": "Employee polls and survey questions."
+    },
+    "/pollResponses/{responseId}": {
+      "schema": {
+        "type": "object"
+      },
+      "description": "One response per employee and poll."
+    },
+    "/monitoringConsents/{uid}": {
+      "schema": {
+        "type": "object"
+      },
+      "description": "Employee monitoring consent and disclosure acknowledgement."
+    },
+    "/monitoringAgentStatus/{uid}": {
+      "schema": {
+        "type": "object"
+      },
+      "description": "Desktop monitoring agent heartbeat and active/paused status."
+    },
+    "/monitoringSnapshots/{snapshotId}": {
+      "schema": {
+        "type": "object"
+      },
+      "description": "Manager-only screenshot metadata with signed-view audit and retention cleanup."
+    },
+    "/compOffRequests/{requestId}": {
+      "schema": {
+        "type": "object"
+      },
+      "description": "Comp-Off credit and redemption requests with manager approval."
+    },
+    "/compOffBalances/{uid}": {
+      "schema": {
+        "type": "object"
+      },
+      "description": "Employee Comp-Off balance adjusted atomically when requests are approved."
+    },
+    "/optionalHolidaySelections/{selectionId}": {
+      "schema": {
+        "type": "object"
+      },
+      "description": "Employee-selected optional holidays with server-enforced annual limits."
+    },
+    "/announcementReads/{readId}": {
+      "schema": {
+        "type": "object"
+      },
+      "description": "Employee read confirmations and policy acknowledgements for announcements."
+    },
+    "/feedback360/{feedbackId}": {
+      "schema": {
+        "type": "object"
+      },
+      "description": "Peer, manager and direct-report 360-degree feedback records."
+    },
+    "/shiftTemplates/{templateId}": {
+      "schema": {
+        "type": "object"
+      },
+      "description": "Reusable shift timing templates managed by HR and Super Admin."
+    },
+    "/shiftAssignments/{assignmentId}": {
+      "schema": {
+        "type": "object"
+      },
+      "description": "Employee shift assignments and weekly roster schedules."
+    },
+    "/reviewCycles/{cycleId}": {
+      "schema": {
+        "type": "object"
+      },
+      "description": "Performance review cycles with weighted KPI criteria."
+    },
+    "/leaveResetLogs/{logId}": {
+      "schema": {
+        "type": "object"
+      },
+      "description": "Immutable annual leave reset and carry-forward audit logs."
+    },
+    "/backupHistory/{backupId}": {
+      "schema": {
+        "$ref": "#/entities/BackupRecord"
+      },
+      "description": "Super Admin automatic and manual backup history records with SHA-256 verification."
+    }
+  }
+}

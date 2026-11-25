@@ -1,0 +1,1741 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. Global Safety Net (Default Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 2. Hardened Global Primitives
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidTimestampCreate() {
+      return incoming().createdAt == request.time && incoming().updatedAt == request.time;
+    }
+
+    function isValidTimestampUpdate() {
+      return incoming().createdAt == existing().createdAt && incoming().updatedAt == request.time;
+    }
+
+    function isBootstrappedOwner() {
+      return isVerified() && request.auth.token.email == 'awe.prianshu@gmail.com';
+    }
+
+    function hasRoleDoc() {
+      return isSignedIn() && exists(/databases/$(database)/documents/roles/$(request.auth.uid));
+    }
+
+    function roleDoc() {
+      return get(/databases/$(database)/documents/roles/$(request.auth.uid)).data;
+    }
+
+    function isSuperAdmin() {
+      return isBootstrappedOwner() || (
+        isVerified() && (
+          exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+          (hasRoleDoc() && roleDoc().role == 'super_admin' && roleDoc().status == 'active')
+        )
+      );
+    }
+
+    function isHR() {
+      return isSuperAdmin() || (
+        isVerified() && hasRoleDoc() && roleDoc().role == 'hr_manager' && roleDoc().status == 'active'
+      );
+    }
+
+    function isDeptManager() {
+      return isVerified() && hasRoleDoc() && roleDoc().role == 'dept_manager' && roleDoc().status == 'active';
+    }
+
+    function isTeamLead() {
+      return isVerified() && hasRoleDoc() && roleDoc().role == 'team_lead' && roleDoc().status == 'active';
+    }
+
+    function isDeptLeadOrManager() {
+      return isDeptManager() || isTeamLead();
+    }
+
+    function myDepartmentId() {
+      return roleDoc().departmentId;
+    }
+
+    function isActiveMember() {
+      return isSuperAdmin() || (isVerified() && hasRoleDoc() && roleDoc().status == 'active');
+    }
+
+    // 3. Entity Validation Blueprints
+    function isValidSystemSetup(data) {
+      return data.keys().hasAll(['initialized', 'superAdminUid', 'companyName', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['initialized', 'superAdminUid', 'companyName', 'createdAt', 'updatedAt'])
+        && data.initialized is bool
+        && data.initialized == true
+        && isValidId(data.superAdminUid)
+        && data.companyName is string && data.companyName.size() >= 2 && data.companyName.size() <= 120;
+    }
+
+    function isValidAdminRecord(data) {
+      return data.keys().hasAll(['uid', 'email', 'createdAt'])
+        && data.keys().hasOnly(['uid', 'email', 'createdAt'])
+        && isValidId(data.uid)
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 254;
+    }
+
+    function isValidRoleAssignment(data) {
+      return data.keys().hasAll(['uid', 'email', 'role', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'email', 'role', 'departmentId', 'teamId', 'teamLeadUid', 'inviteId', 'status', 'createdAt', 'updatedAt'])
+        && isValidId(data.uid)
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 254
+        && data.role in ['super_admin', 'hr_manager', 'dept_manager', 'team_lead', 'employee']
+        && data.status in ['active', 'inactive', 'pending']
+        && (!('departmentId' in data) || (data.departmentId is string && data.departmentId.size() <= 128))
+        && (!('teamId' in data) || (data.teamId is string && data.teamId.size() <= 128))
+        && (!('teamLeadUid' in data) || (data.teamLeadUid is string && data.teamLeadUid.size() <= 128))
+        && (!('inviteId' in data) || (data.inviteId is string && data.inviteId.size() <= 128));
+    }
+
+    function isValidUserAccount(data) {
+      return data.keys().hasAll(['uid', 'displayName', 'email', 'emailVerified', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'displayName', 'email', 'photoURL', 'employeeId', 'emailVerified', 'createdAt', 'updatedAt'])
+        && isValidId(data.uid)
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 120
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 254
+        && data.emailVerified is bool
+        && (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 1000))
+        && (!('employeeId' in data) || (data.employeeId is string && data.employeeId.size() <= 128));
+    }
+
+    function isValidDirectoryEntry(data) {
+      return data.keys().hasAll(['id', 'employeeCode', 'fullName', 'departmentId', 'departmentName', 'designation', 'joiningDate', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'uid', 'employeeCode', 'fullName', 'avatarUrl', 'departmentId', 'departmentName', 'designation', 'joiningDate', 'birthMonthDay', 'status', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && data.employeeCode is string && data.employeeCode.size() >= 2 && data.employeeCode.size() <= 32
+        && data.fullName is string && data.fullName.size() >= 2 && data.fullName.size() <= 120
+        && data.departmentId is string && data.departmentId.size() <= 128
+        && data.departmentName is string && data.departmentName.size() <= 120
+        && data.designation is string && data.designation.size() <= 120
+        && data.joiningDate is string && data.joiningDate.size() <= 20
+        && data.status in ['active', 'inactive', 'onboarding', 'offboarding']
+        && (!('uid' in data) || (data.uid is string && data.uid.size() <= 128))
+        && (!('avatarUrl' in data) || (data.avatarUrl is string && data.avatarUrl.size() <= 1000))
+        && (!('birthMonthDay' in data) || (data.birthMonthDay is string && data.birthMonthDay.size() <= 10));
+    }
+
+    function isValidEmployeeProfile(data) {
+      return data.keys().hasAll(['id', 'employeeCode', 'fullName', 'email', 'departmentId', 'departmentName', 'designation', 'joiningDate', 'employmentType', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'uid', 'employeeCode', 'fullName', 'avatarUrl', 'email', 'phone', 'address', 'departmentId', 'departmentName', 'designation', 'joiningDate', 'birthDate', 'birthdayOptOut', 'probationEndDate', 'probationStatus', 'employmentType', 'reportingManagerUid', 'reportingManagerName', 'teamId', 'teamName', 'teamLeadUid', 'teamLeadName', 'emergencyContactName', 'emergencyContactPhone', 'emergencyContactRelation', 'timezone', 'countryCode', 'shiftStartTime', 'shiftEndTime', 'status', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && data.employeeCode is string && data.employeeCode.size() >= 2 && data.employeeCode.size() <= 32
+        && data.fullName is string && data.fullName.size() >= 2 && data.fullName.size() <= 120
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 254
+        && data.departmentId is string && data.departmentId.size() <= 128
+        && data.departmentName is string && data.departmentName.size() <= 120
+        && data.designation is string && data.designation.size() <= 120
+        && data.joiningDate is string && data.joiningDate.size() <= 20
+        && data.employmentType in ['full_time', 'part_time', 'contract', 'intern']
+        && data.status in ['active', 'inactive', 'onboarding', 'offboarding']
+        && (!('uid' in data) || (data.uid is string && data.uid.size() <= 128))
+        && (!('avatarUrl' in data) || (data.avatarUrl is string && data.avatarUrl.size() <= 1000))
+        && (!('phone' in data) || (data.phone is string && data.phone.size() <= 40))
+        && (!('address' in data) || (data.address is string && data.address.size() <= 500))
+        && (!('birthDate' in data) || (data.birthDate is string && data.birthDate.size() <= 20))
+        && (!('birthdayOptOut' in data) || data.birthdayOptOut is bool)
+        && (!('probationEndDate' in data) || (data.probationEndDate is string && data.probationEndDate.size() == 10))
+        && (!('probationStatus' in data) || data.probationStatus in ['in_probation', 'confirmed', 'extended'])
+        && (!('reportingManagerUid' in data) || (data.reportingManagerUid is string && data.reportingManagerUid.size() <= 128))
+        && (!('reportingManagerName' in data) || (data.reportingManagerName is string && data.reportingManagerName.size() <= 120))
+        && (!('teamId' in data) || (data.teamId is string && data.teamId.size() <= 128))
+        && (!('teamName' in data) || (data.teamName is string && data.teamName.size() <= 120))
+        && (!('teamLeadUid' in data) || (data.teamLeadUid is string && data.teamLeadUid.size() <= 128))
+        && (!('teamLeadName' in data) || (data.teamLeadName is string && data.teamLeadName.size() <= 120))
+        && (!('emergencyContactName' in data) || (data.emergencyContactName is string && data.emergencyContactName.size() <= 120))
+        && (!('emergencyContactPhone' in data) || (data.emergencyContactPhone is string && data.emergencyContactPhone.size() <= 40))
+        && (!('emergencyContactRelation' in data) || (data.emergencyContactRelation is string && data.emergencyContactRelation.size() <= 60))
+        && (!('timezone' in data) || (data.timezone is string && data.timezone.size() <= 80))
+        && (!('countryCode' in data) || (data.countryCode is string && data.countryCode.size() <= 3))
+        && (!('shiftStartTime' in data) || (data.shiftStartTime is string && data.shiftStartTime.matches('^[0-9]{2}:[0-9]{2}$')))
+        && (!('shiftEndTime' in data) || (data.shiftEndTime is string && data.shiftEndTime.matches('^[0-9]{2}:[0-9]{2}$')));
+    }
+
+    function isValidSalaryStructure(data) {
+      return data.keys().hasAll(['employeeId', 'currency', 'basicSalary', 'hraAllowance', 'transportAllowance', 'specialAllowance', 'bonus', 'incentives', 'deductions', 'overtimeHourlyRate', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['employeeId', 'uid', 'currency', 'basicSalary', 'hraAllowance', 'transportAllowance', 'specialAllowance', 'bonus', 'incentives', 'deductions', 'overtimeHourlyRate', 'effectiveFrom', 'updatedByUid', 'createdAt', 'updatedAt'])
+        && isValidId(data.employeeId)
+        && data.currency is string && data.currency.size() >= 3 && data.currency.size() <= 6
+        && data.basicSalary is number && data.basicSalary >= 0
+        && data.hraAllowance is number && data.hraAllowance >= 0
+        && data.transportAllowance is number && data.transportAllowance >= 0
+        && data.specialAllowance is number && data.specialAllowance >= 0
+        && data.bonus is number && data.bonus >= 0
+        && data.incentives is number && data.incentives >= 0
+        && data.deductions is number && data.deductions >= 0
+        && data.overtimeHourlyRate is number && data.overtimeHourlyRate >= 0
+        && (!('uid' in data) || (data.uid is string && data.uid.size() <= 128))
+        && (!('effectiveFrom' in data) || (data.effectiveFrom is string && data.effectiveFrom.size() <= 20))
+        && (!('updatedByUid' in data) || (data.updatedByUid is string && data.updatedByUid.size() <= 128));
+    }
+
+    function isValidInvitation(data) {
+      return data.keys().hasAll(['id', 'email', 'fullName', 'role', 'departmentId', 'departmentName', 'designation', 'invitedByUid', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'email', 'fullName', 'role', 'departmentId', 'departmentName', 'designation', 'employeeId', 'invitedByUid', 'status', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 254
+        && data.fullName is string && data.fullName.size() >= 2 && data.fullName.size() <= 120
+        && data.role in ['hr_manager', 'dept_manager', 'team_lead', 'employee']
+        && data.departmentId is string && data.departmentId.size() <= 128
+        && data.departmentName is string && data.departmentName.size() <= 120
+        && data.designation is string && data.designation.size() <= 120
+        && isValidId(data.invitedByUid)
+        && data.status in ['pending', 'accepted', 'revoked']
+        && (!('employeeId' in data) || (data.employeeId is string && data.employeeId.size() <= 128));
+    }
+
+    function isValidDepartment(data) {
+      return data.keys().hasAll(['id', 'name', 'code', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'name', 'code', 'headUid', 'headName', 'description', 'countryCode', 'location', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && data.name is string && data.name.size() >= 2 && data.name.size() <= 120
+        && data.code is string && data.code.size() >= 2 && data.code.size() <= 20
+        && (!('headUid' in data) || (data.headUid is string && data.headUid.size() <= 128))
+        && (!('headName' in data) || (data.headName is string && data.headName.size() <= 120))
+        && (!('description' in data) || (data.description is string && data.description.size() <= 500))
+        && (!('countryCode' in data) || (data.countryCode is string && data.countryCode.size() <= 3))
+        && (!('location' in data) || (data.location is string && data.location.size() <= 120));
+    }
+
+    function isValidDesignation(data) {
+      return data.keys().hasAll(['id', 'title', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'title', 'departmentId', 'level', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && data.title is string && data.title.size() >= 2 && data.title.size() <= 120
+        && (!('departmentId' in data) || (data.departmentId is string && data.departmentId.size() <= 128))
+        && (!('level' in data) || (data.level is string && data.level.size() <= 40));
+    }
+
+    function isValidAttendanceRecord(data) {
+      return data.keys().hasAll(['id', 'uid', 'employeeId', 'employeeName', 'departmentId', 'date', 'status', 'breakMinutes', 'workingMinutes', 'isLate', 'isEarlyDeparture', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'uid', 'employeeId', 'employeeName', 'departmentId', 'date', 'checkInTime', 'checkOutTime', 'lunchStartTime', 'lunchEndTime', 'actualLunchMinutes', 'breakMinutes', 'workingMinutes', 'lateMinutes', 'latePenaltyDays', 'earlyDepartureMinutes', 'officeTimezone', 'correctionId', 'status', 'isLate', 'isEarlyDeparture', 'notes', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && isValidId(data.uid)
+        && data.employeeId is string && data.employeeId.size() <= 128
+        && data.employeeName is string && data.employeeName.size() <= 120
+        && data.departmentId is string && data.departmentId.size() <= 128
+        && data.date is string && data.date.size() == 10
+        && data.status in ['present', 'late', 'half_day', 'early_departure', 'absent', 'weekly_off', 'holiday']
+        && data.breakMinutes is number && data.breakMinutes >= 0 && data.breakMinutes <= 600
+        && data.workingMinutes is number && data.workingMinutes >= 0 && data.workingMinutes <= 1440
+        && data.isLate is bool
+        && data.isEarlyDeparture is bool
+        && (!('checkInTime' in data) || (data.checkInTime is string && data.checkInTime.size() <= 40))
+        && (!('checkOutTime' in data) || (data.checkOutTime is string && data.checkOutTime.size() <= 40))
+        && (!('lunchStartTime' in data) || (data.lunchStartTime is string && data.lunchStartTime.size() <= 40))
+        && (!('lunchEndTime' in data) || (data.lunchEndTime is string && data.lunchEndTime.size() <= 40))
+        && (!('actualLunchMinutes' in data) || (data.actualLunchMinutes is number && data.actualLunchMinutes >= 0 && data.actualLunchMinutes <= 600))
+        && (!('lateMinutes' in data) || (data.lateMinutes is number && data.lateMinutes >= 0 && data.lateMinutes <= 1440))
+        && (!('latePenaltyDays' in data) || (data.latePenaltyDays is number && data.latePenaltyDays >= 0 && data.latePenaltyDays <= 1))
+        && (!('earlyDepartureMinutes' in data) || (data.earlyDepartureMinutes is number && data.earlyDepartureMinutes >= 0 && data.earlyDepartureMinutes <= 1440))
+        && (!('officeTimezone' in data) || (data.officeTimezone is string && data.officeTimezone.size() <= 80))
+        && (!('correctionId' in data) || (data.correctionId is string && data.correctionId.size() <= 128))
+        && (!('notes' in data) || (data.notes is string && data.notes.size() <= 500));
+    }
+
+    function isValidAttendanceCorrection(data) {
+      return data.keys().hasAll(['id', 'uid', 'employeeId', 'employeeName', 'departmentId', 'date', 'requestedCheckIn', 'reason', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'attendanceId', 'uid', 'employeeId', 'employeeName', 'departmentId', 'date', 'requestedCheckIn', 'requestedCheckOut', 'requestedBreakMinutes', 'reason', 'status', 'reviewedByUid', 'reviewNotes', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && isValidId(data.uid)
+        && data.employeeId is string && data.employeeId.size() <= 128
+        && data.employeeName is string && data.employeeName.size() <= 120
+        && data.departmentId is string && data.departmentId.size() <= 128
+        && data.date is string && data.date.size() == 10
+        && data.requestedCheckIn is string && data.requestedCheckIn.size() <= 40
+        && data.reason is string && data.reason.size() >= 3 && data.reason.size() <= 500
+        && data.status in ['pending', 'approved', 'rejected']
+        && (!('attendanceId' in data) || (data.attendanceId is string && data.attendanceId.size() <= 128))
+        && (!('requestedCheckOut' in data) || (data.requestedCheckOut is string && data.requestedCheckOut.size() <= 40))
+        && (!('requestedBreakMinutes' in data) || (data.requestedBreakMinutes is number && data.requestedBreakMinutes >= 0))
+        && (!('reviewedByUid' in data) || (data.reviewedByUid is string && data.reviewedByUid.size() <= 128))
+        && (!('reviewNotes' in data) || (data.reviewNotes is string && data.reviewNotes.size() <= 500));
+    }
+
+    function isValidHoliday(data) {
+      return data.keys().hasAll(['id', 'name', 'date', 'type', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'name', 'date', 'type', 'description', 'countryCode', 'location', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && data.name is string && data.name.size() >= 2 && data.name.size() <= 120
+        && data.date is string && data.date.size() == 10
+        && data.type in ['public', 'company', 'optional']
+        && (!('description' in data) || (data.description is string && data.description.size() <= 500))
+        && (!('countryCode' in data) || (data.countryCode is string && data.countryCode.size() <= 3))
+        && (!('location' in data) || (data.location is string && data.location.size() <= 120));
+    }
+
+    function isValidLeaveBalance(data) {
+      return data.keys().hasAll(['uid', 'year', 'casualTotal', 'casualUsed', 'sickTotal', 'sickUsed', 'paidTotal', 'paidUsed', 'emergencyTotal', 'emergencyUsed', 'unpaidUsed', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'employeeId', 'departmentId', 'teamId', 'teamLeadUid', 'reportingManagerUid', 'ownerRole', 'year', 'casualTotal', 'casualUsed', 'sickTotal', 'sickUsed', 'paidTotal', 'paidUsed', 'emergencyTotal', 'emergencyUsed', 'unpaidUsed', 'carriedForwardDays', 'lastResetYear', 'createdAt', 'updatedAt'])
+        && isValidId(data.uid)
+        && data.year is number
+        && data.casualTotal is number && data.casualTotal >= 0 && data.casualTotal <= 365 && data.casualUsed is number && data.casualUsed >= 0 && data.casualUsed <= 365
+        && data.sickTotal is number && data.sickTotal >= 0 && data.sickTotal <= 365 && data.sickUsed is number && data.sickUsed >= 0 && data.sickUsed <= 365
+        && data.paidTotal is number && data.paidTotal >= 0 && data.paidTotal <= 365 && data.paidUsed is number && data.paidUsed >= 0 && data.paidUsed <= 365
+        && data.emergencyTotal is number && data.emergencyTotal >= 0 && data.emergencyTotal <= 365 && data.emergencyUsed is number && data.emergencyUsed >= 0 && data.emergencyUsed <= 365
+        && data.unpaidUsed is number && data.unpaidUsed >= 0 && data.unpaidUsed <= 365
+        && (!('employeeId' in data) || (data.employeeId is string && data.employeeId.size() <= 128))
+        && (!('departmentId' in data) || (data.departmentId is string && data.departmentId.size() <= 128))
+        && (!('teamId' in data) || (data.teamId is string && data.teamId.size() <= 128))
+        && (!('teamLeadUid' in data) || (data.teamLeadUid is string && data.teamLeadUid.size() <= 128))
+        && (!('reportingManagerUid' in data) || (data.reportingManagerUid is string && data.reportingManagerUid.size() <= 128))
+        && (!('ownerRole' in data) || data.ownerRole in ['super_admin', 'hr_manager', 'dept_manager', 'team_lead', 'employee'])
+        && (!('carriedForwardDays' in data) || (data.carriedForwardDays is number && data.carriedForwardDays >= 0))
+        && (!('lastResetYear' in data) || data.lastResetYear is number);
+    }
+
+    function isValidLeaveRequest(data) {
+      return data.keys().hasAll(['id', 'uid', 'employeeId', 'employeeName', 'departmentId', 'leaveType', 'startDate', 'endDate', 'daysCount', 'reason', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'uid', 'employeeId', 'employeeName', 'departmentId', 'teamId', 'teamName', 'teamLeadUid', 'reportingManagerUid', 'requesterRole', 'leaveType', 'startDate', 'endDate', 'daysCount', 'dayPart', 'shortLeaveHours', 'reason', 'attachmentUrl', 'attachmentName', 'status', 'reviewedByUid', 'reviewerName', 'reviewComment', 'resubmittedAt', 'cancelledByUid', 'cancelledReason', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && isValidId(data.uid)
+        && data.employeeId is string && data.employeeId.size() <= 128
+        && data.employeeName is string && data.employeeName.size() <= 120
+        && data.departmentId is string && data.departmentId.size() <= 128
+        && (!('teamId' in data) || (data.teamId is string && data.teamId.size() <= 128))
+        && (!('teamName' in data) || (data.teamName is string && data.teamName.size() <= 120))
+        && (!('teamLeadUid' in data) || (data.teamLeadUid is string && data.teamLeadUid.size() <= 128))
+        && (!('reportingManagerUid' in data) || (data.reportingManagerUid is string && data.reportingManagerUid.size() <= 128))
+        && (!('requesterRole' in data) || data.requesterRole in ['super_admin', 'hr_manager', 'dept_manager', 'team_lead', 'employee'])
+        && data.leaveType in ['casual', 'sick', 'paid', 'unpaid', 'emergency', 'short']
+        && data.startDate is string && data.startDate.size() == 10
+        && data.endDate is string && data.endDate.size() == 10
+        && data.daysCount is number && data.daysCount > 0 && data.daysCount <= 365
+        && (!('dayPart' in data) || data.dayPart in ['full', 'first_half', 'second_half', 'short'])
+        && (!('shortLeaveHours' in data) || (data.shortLeaveHours is number && data.shortLeaveHours >= 1 && data.shortLeaveHours <= 2))
+        && (data.leaveType != 'short' || (('dayPart' in data) && data.dayPart == 'short' && ('shortLeaveHours' in data)))
+        && data.reason is string && data.reason.size() >= 3 && data.reason.size() <= 500
+        && (!('attachmentUrl' in data) || (data.attachmentUrl is string && data.attachmentUrl.size() <= 1500))
+        && (!('attachmentName' in data) || (data.attachmentName is string && data.attachmentName.size() <= 200))
+        && data.status in ['pending', 'changes_requested', 'approved', 'rejected', 'cancelled']
+        && (!('reviewedByUid' in data) || (data.reviewedByUid is string && data.reviewedByUid.size() <= 128))
+        && (!('reviewerName' in data) || (data.reviewerName is string && data.reviewerName.size() <= 120))
+        && (!('reviewComment' in data) || (data.reviewComment is string && data.reviewComment.size() <= 500))
+        && (!('resubmittedAt' in data) || (data.resubmittedAt is string && data.resubmittedAt.size() <= 40))
+        && (!('cancelledByUid' in data) || (data.cancelledByUid is string && data.cancelledByUid.size() <= 128))
+        && (!('cancelledReason' in data) || (data.cancelledReason is string && data.cancelledReason.size() <= 500));
+    }
+
+    function isValidPayrollRun(data) {
+      return data.keys().hasAll(['id', 'month', 'currency', 'status', 'totalGross', 'totalDeductions', 'totalNet', 'employeeCount', 'processedByUid', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'month', 'currency', 'status', 'totalGross', 'totalDeductions', 'totalNet', 'employeeCount', 'processedByUid', 'notes', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && data.month is string && data.month.size() == 7
+        && data.currency is string && data.currency.size() >= 3 && data.currency.size() <= 6
+        && data.status in ['draft', 'processed', 'finalized']
+        && data.totalGross is number && data.totalDeductions is number && data.totalNet is number
+        && data.employeeCount is number && data.employeeCount >= 0
+        && isValidId(data.processedByUid)
+        && (!('notes' in data) || (data.notes is string && data.notes.size() <= 500));
+    }
+
+    function isValidPayslip(data) {
+      return data.keys().hasAll(['id', 'runId', 'month', 'employeeId', 'employeeName', 'currency', 'basicSalary', 'allowances', 'bonuses', 'incentives', 'overtimePay', 'unpaidLeaveDeduction', 'otherDeductions', 'grossPay', 'netPay', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'runId', 'month', 'uid', 'employeeId', 'employeeCode', 'employeeName', 'departmentId', 'departmentName', 'designation', 'currency', 'basicSalary', 'allowances', 'bonuses', 'incentives', 'overtimePay', 'overtimeHours', 'unpaidLeaveDays', 'unpaidLeaveDeduction', 'otherDeductions', 'grossPay', 'netPay', 'status', 'paymentNote', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && data.runId is string && data.runId.size() <= 128
+        && data.month is string && data.month.size() == 7
+        && data.employeeId is string && data.employeeId.size() <= 128
+        && data.employeeName is string && data.employeeName.size() <= 120
+        && data.currency is string && data.currency.size() <= 6
+        && data.basicSalary is number && data.allowances is number && data.bonuses is number
+        && data.incentives is number && data.overtimePay is number
+        && data.unpaidLeaveDeduction is number && data.otherDeductions is number
+        && data.grossPay is number && data.netPay is number
+        && data.status in ['generated', 'issued']
+        && (!('uid' in data) || (data.uid is string && data.uid.size() <= 128))
+        && (!('employeeCode' in data) || (data.employeeCode is string && data.employeeCode.size() <= 32))
+        && (!('departmentId' in data) || (data.departmentId is string && data.departmentId.size() <= 128))
+        && (!('departmentName' in data) || (data.departmentName is string && data.departmentName.size() <= 120))
+        && (!('designation' in data) || (data.designation is string && data.designation.size() <= 120))
+        && (!('overtimeHours' in data) || data.overtimeHours is number)
+        && (!('unpaidLeaveDays' in data) || data.unpaidLeaveDays is number)
+        && (!('paymentNote' in data) || (data.paymentNote is string && data.paymentNote.size() <= 300));
+    }
+
+    function isValidJobOpening(data) {
+      return data.keys().hasAll(['id', 'title', 'departmentId', 'departmentName', 'employmentType', 'openings', 'status', 'createdByUid', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'title', 'departmentId', 'departmentName', 'location', 'employmentType', 'openings', 'description', 'requirements', 'status', 'createdByUid', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && data.title is string && data.title.size() >= 2 && data.title.size() <= 120
+        && data.departmentId is string && data.departmentId.size() <= 128
+        && data.departmentName is string && data.departmentName.size() <= 120
+        && data.employmentType in ['full_time', 'part_time', 'contract', 'intern']
+        && data.openings is number && data.openings >= 1
+        && data.status in ['open', 'paused', 'closed']
+        && isValidId(data.createdByUid)
+        && (!('location' in data) || (data.location is string && data.location.size() <= 120))
+        && (!('description' in data) || (data.description is string && data.description.size() <= 2000))
+        && (!('requirements' in data) || (data.requirements is string && data.requirements.size() <= 2000));
+    }
+
+    function isValidCandidate(data) {
+      return data.keys().hasAll(['id', 'jobId', 'jobTitle', 'fullName', 'email', 'stage', 'createdByUid', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'jobId', 'jobTitle', 'fullName', 'email', 'phone', 'resumeUrl', 'resumeName', 'stage', 'interviewDate', 'interviewerUid', 'interviewerName', 'interviewFeedback', 'rating', 'notes', 'createdByUid', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && data.jobId is string && data.jobId.size() <= 128
+        && data.jobTitle is string && data.jobTitle.size() <= 120
+        && data.fullName is string && data.fullName.size() >= 2 && data.fullName.size() <= 120
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 254
+        && data.stage in ['applied', 'screening', 'interview', 'offer', 'selected', 'rejected']
+        && isValidId(data.createdByUid)
+        && (!('phone' in data) || (data.phone is string && data.phone.size() <= 40))
+        && (!('resumeUrl' in data) || (data.resumeUrl is string && data.resumeUrl.size() <= 1500))
+        && (!('resumeName' in data) || (data.resumeName is string && data.resumeName.size() <= 200))
+        && (!('interviewDate' in data) || (data.interviewDate is string && data.interviewDate.size() <= 40))
+        && (!('interviewerUid' in data) || (data.interviewerUid is string && data.interviewerUid.size() <= 128))
+        && (!('interviewerName' in data) || (data.interviewerName is string && data.interviewerName.size() <= 120))
+        && (!('interviewFeedback' in data) || (data.interviewFeedback is string && data.interviewFeedback.size() <= 1500))
+        && (!('rating' in data) || (data.rating is number && data.rating >= 0 && data.rating <= 5))
+        && (!('notes' in data) || (data.notes is string && data.notes.size() <= 1500));
+    }
+
+    function isValidOnboardingCase(data) {
+      return data.keys().hasAll(['id', 'employeeId', 'employeeName', 'email', 'departmentId', 'departmentName', 'designation', 'offerLetterStatus', 'policyAcknowledged', 'documentsVerified', 'accountCreated', 'trainingChecklist', 'progressPercent', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'uid', 'employeeId', 'employeeName', 'email', 'departmentId', 'departmentName', 'designation', 'offerLetterUrl', 'offerLetterStatus', 'policyAcknowledged', 'documentsVerified', 'accountCreated', 'trainingChecklist', 'progressPercent', 'status', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && data.employeeId is string && data.employeeId.size() <= 128
+        && data.employeeName is string && data.employeeName.size() >= 2 && data.employeeName.size() <= 120
+        && data.email is string && data.email.size() <= 254
+        && data.departmentId is string && data.departmentId.size() <= 128
+        && data.departmentName is string && data.departmentName.size() <= 120
+        && data.designation is string && data.designation.size() <= 120
+        && data.offerLetterStatus in ['pending', 'sent', 'signed']
+        && data.policyAcknowledged is bool
+        && data.documentsVerified is bool
+        && data.accountCreated is bool
+        && data.trainingChecklist is list && data.trainingChecklist.size() <= 25
+        && data.progressPercent is number && data.progressPercent >= 0 && data.progressPercent <= 100
+        && data.status in ['in_progress', 'completed']
+        && (!('uid' in data) || (data.uid is string && data.uid.size() <= 128))
+        && (!('offerLetterUrl' in data) || (data.offerLetterUrl is string && data.offerLetterUrl.size() <= 1500));
+    }
+
+    function isValidOffboardingCase(data) {
+      return data.keys().hasAll(['id', 'uid', 'employeeId', 'employeeName', 'departmentId', 'resignationDate', 'lastWorkingDay', 'noticePeriodDays', 'reason', 'approvalStatus', 'exitInterviewCompleted', 'assetsReturned', 'documentsCleared', 'finalSettlementAmount', 'finalSettlementStatus', 'accountDeactivated', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'uid', 'employeeId', 'employeeName', 'departmentId', 'resignationDate', 'lastWorkingDay', 'noticePeriodDays', 'reason', 'approvalStatus', 'approvedByUid', 'exitInterviewCompleted', 'exitInterviewNotes', 'assetsReturned', 'documentsCleared', 'finalSettlementAmount', 'finalSettlementStatus', 'accountDeactivated', 'status', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && isValidId(data.uid)
+        && data.employeeId is string && data.employeeId.size() <= 128
+        && data.employeeName is string && data.employeeName.size() <= 120
+        && data.departmentId is string && data.departmentId.size() <= 128
+        && data.resignationDate is string && data.resignationDate.size() <= 20
+        && data.lastWorkingDay is string && data.lastWorkingDay.size() <= 20
+        && data.noticePeriodDays is number && data.noticePeriodDays >= 0
+        && data.reason is string && data.reason.size() <= 1000
+        && data.approvalStatus in ['pending', 'approved', 'rejected']
+        && data.exitInterviewCompleted is bool
+        && data.assetsReturned is bool
+        && data.documentsCleared is bool
+        && data.finalSettlementAmount is number
+        && data.finalSettlementStatus in ['pending', 'calculated', 'settled']
+        && data.accountDeactivated is bool
+        && data.status in ['initiated', 'in_progress', 'completed']
+        && (!('approvedByUid' in data) || (data.approvedByUid is string && data.approvedByUid.size() <= 128))
+        && (!('exitInterviewNotes' in data) || (data.exitInterviewNotes is string && data.exitInterviewNotes.size() <= 1500));
+    }
+
+    function isValidPerformanceGoal(data) {
+      return data.keys().hasAll(['id', 'uid', 'employeeId', 'employeeName', 'departmentId', 'title', 'targetDate', 'progress', 'status', 'createdByUid', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'uid', 'employeeId', 'employeeName', 'departmentId', 'title', 'description', 'targetDate', 'progress', 'status', 'createdByUid', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && isValidId(data.uid)
+        && data.employeeId is string && data.employeeId.size() <= 128
+        && data.employeeName is string && data.employeeName.size() <= 120
+        && data.departmentId is string && data.departmentId.size() <= 128
+        && data.title is string && data.title.size() >= 2 && data.title.size() <= 200
+        && data.targetDate is string && data.targetDate.size() <= 20
+        && data.progress is number && data.progress >= 0 && data.progress <= 100
+        && data.status in ['not_started', 'in_progress', 'completed']
+        && isValidId(data.createdByUid)
+        && (!('description' in data) || (data.description is string && data.description.size() <= 1000));
+    }
+
+    function isValidPerformanceReview(data) {
+      return data.keys().hasAll(['id', 'uid', 'employeeId', 'employeeName', 'departmentId', 'reviewerUid', 'reviewerName', 'reviewPeriod', 'rating', 'productivityScore', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'uid', 'employeeId', 'employeeName', 'departmentId', 'reviewerUid', 'reviewerName', 'reviewPeriod', 'cycleId', 'kpiScores', 'weightedScore', 'rating', 'productivityScore', 'achievements', 'feedback', 'status', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && isValidId(data.uid)
+        && data.employeeId is string && data.employeeId.size() <= 128
+        && data.employeeName is string && data.employeeName.size() <= 120
+        && data.departmentId is string && data.departmentId.size() <= 128
+        && isValidId(data.reviewerUid)
+        && data.reviewerName is string && data.reviewerName.size() <= 120
+        && data.reviewPeriod is string && data.reviewPeriod.size() == 7
+        && data.rating is number && data.rating >= 1 && data.rating <= 5
+        && data.productivityScore is number && data.productivityScore >= 0 && data.productivityScore <= 100
+        && data.status in ['draft', 'submitted', 'acknowledged']
+        && (!('cycleId' in data) || (data.cycleId is string && data.cycleId.size() <= 128))
+        && (!('kpiScores' in data) || (data.kpiScores is list && data.kpiScores.size() <= 20))
+        && (!('weightedScore' in data) || (data.weightedScore is number && data.weightedScore >= 0 && data.weightedScore <= 100))
+        && (!('achievements' in data) || (data.achievements is string && data.achievements.size() <= 1500))
+        && (!('feedback' in data) || (data.feedback is string && data.feedback.size() <= 1500));
+    }
+
+    function isValidAnnouncement(data) {
+      return data.keys().hasAll(['id', 'title', 'category', 'content', 'pinned', 'authorUid', 'authorName', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly([
+          'id', 'title', 'category', 'content', 'pinned',
+          'audience', 'departmentId', 'teamId', 'teamName', 'teamLeadUid',
+          'publishDate', 'expiryDate', 'authorUid', 'authorName', 'authorRole',
+          'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.id)
+        && data.title is string && data.title.size() >= 2 && data.title.size() <= 160
+        && data.category in ['notice', 'holiday', 'birthday', 'anniversary', 'event', 'policy']
+        && data.content is string && data.content.size() >= 3 && data.content.size() <= 4000
+        && data.pinned is bool
+        && isValidId(data.authorUid)
+        && data.authorName is string && data.authorName.size() <= 120
+        && (!('audience' in data) || data.audience in ['company', 'department', 'team'])
+        && (!('departmentId' in data) || (data.departmentId is string && data.departmentId.size() <= 128))
+        && (!('teamId' in data) || (data.teamId is string && data.teamId.size() <= 128))
+        && (!('teamName' in data) || (data.teamName is string && data.teamName.size() <= 120))
+        && (!('teamLeadUid' in data) || (data.teamLeadUid is string && data.teamLeadUid.size() <= 128))
+        && (!('publishDate' in data) || (data.publishDate is string && data.publishDate.size() <= 16))
+        && (!('expiryDate' in data) || (data.expiryDate is string && data.expiryDate.size() <= 16))
+        && (!('authorRole' in data) || data.authorRole in ['super_admin', 'hr_manager', 'dept_manager', 'team_lead', 'employee']);
+    }
+
+    function canReadAnnouncement(data) {
+      return isSuperAdmin() || isHR()
+        || !('audience' in data)
+        || data.audience == 'company'
+        || (data.audience == 'department' && (
+          data.authorUid == request.auth.uid
+          || ('departmentId' in data && data.departmentId == myDepartmentId())
+        ))
+        || (data.audience == 'team' && (
+          data.authorUid == request.auth.uid
+          || ('teamLeadUid' in data && data.teamLeadUid == request.auth.uid)
+          || ('teamId' in data && data.teamId == request.auth.uid)
+          || (isDeptManager() && 'departmentId' in data && data.departmentId == myDepartmentId())
+          || (hasRoleDoc() && 'teamLeadUid' in roleDoc() && roleDoc().teamLeadUid != '' && 'teamLeadUid' in data && data.teamLeadUid == roleDoc().teamLeadUid)
+          || (hasRoleDoc() && 'teamLeadUid' in roleDoc() && roleDoc().teamLeadUid != '' && 'teamId' in data && data.teamId == roleDoc().teamLeadUid)
+          || (hasRoleDoc() && 'teamId' in roleDoc() && roleDoc().teamId != '' && 'teamId' in data && data.teamId == roleDoc().teamId)
+        ));
+    }
+
+    function isValidEmployeeDocument(data) {
+      return data.keys().hasAll(['id', 'uid', 'employeeId', 'title', 'category', 'fileUrl', 'fileName', 'fileSize', 'verified', 'uploadedByUid', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'uid', 'employeeId', 'title', 'category', 'fileUrl', 'fileName', 'fileSize', 'expiryDate', 'verified', 'verifiedByUid', 'uploadedByUid', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && isValidId(data.uid)
+        && data.employeeId is string && data.employeeId.size() <= 128
+        && data.title is string && data.title.size() >= 2 && data.title.size() <= 160
+        && data.category in ['id_proof', 'contract', 'offer_letter', 'certificate', 'policy', 'other']
+        && data.fileUrl is string && data.fileUrl.size() >= 1 && data.fileUrl.size() <= 1500
+        && data.fileName is string && data.fileName.size() <= 255
+        && data.fileSize is number && data.fileSize >= 0
+        && (!('expiryDate' in data) || (data.expiryDate is string && data.expiryDate.size() == 10))
+        && data.verified is bool
+        && isValidId(data.uploadedByUid)
+        && (!('verifiedByUid' in data) || (data.verifiedByUid is string && data.verifiedByUid.size() <= 128));
+    }
+
+    function isValidNotification(data) {
+      return data.keys().hasAll(['id', 'recipientUid', 'title', 'message', 'type', 'read', 'emailSent', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'recipientUid', 'title', 'message', 'type', 'linkTab', 'taskId', 'read', 'emailSent', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && isValidId(data.recipientUid)
+        && data.title is string && data.title.size() >= 2 && data.title.size() <= 160
+        && data.message is string && data.message.size() >= 2 && data.message.size() <= 1000
+        && data.type in ['leave', 'attendance', 'payroll', 'announcement', 'document', 'performance', 'task', 'system']
+        && data.read is bool
+        && data.emailSent is bool
+        && (!('linkTab' in data) || (data.linkTab is string && data.linkTab.size() <= 60))
+        && (!('taskId' in data) || isValidId(data.taskId));
+    }
+
+    function isValidNotificationPref(data) {
+      return data.keys().hasAll(['uid', 'emailLeaveUpdates', 'emailPayroll', 'emailAnnouncements', 'emailPerformance', 'pushEnabled', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'emailLeaveUpdates', 'emailPayroll', 'emailAnnouncements', 'emailPerformance', 'pushEnabled', 'fcmToken', 'updatedAt'])
+        && isValidId(data.uid)
+        && data.emailLeaveUpdates is bool
+        && data.emailPayroll is bool
+        && data.emailAnnouncements is bool
+        && data.emailPerformance is bool
+        && data.pushEnabled is bool
+        && (!('fcmToken' in data) || (data.fcmToken is string && data.fcmToken.size() <= 500));
+    }
+
+    function isValidHrSetting(data) {
+      return data.keys().hasAll(['id', 'updatedAt'])
+        && data.id in ['company', 'workPolicy', 'payrollConfig', 'leavePolicy', 'approvalWorkflows', 'integrations', 'backupConfig']
+        && data.keys().hasOnly([
+          'id', 'updatedByUid', 'updatedAt',
+          'companyName', 'domain', 'contactEmail', 'address', 'defaultCurrency',
+          'workStartTime', 'workEndTime', 'lunchStartTime', 'lunchEndTime', 'graceMinutes', 'breakMinutes', 'halfDayThresholdMinutes', 'lunchTrackingEnabled', 'requireDailyWorkReportBeforeCheckout', 'maxOptionalHolidays', 'lateMarksThreshold', 'lateMarksAction', 'officeTimezone', 'weeklyOffs',
+          'currency', 'currencySymbol', 'workingDaysPerMonth', 'overtimeMultiplier', 'unpaidLeaveDeductionEnabled', 'customRules',
+          'casualAnnual', 'sickAnnual', 'paidAnnual', 'emergencyAnnual', 'carryForwardEnabled', 'maxCarryForwardPaid', 'lastResetYear', 'superAdminSelfApprovalMode', 'superAdminApproverUid',
+          'rules',
+          'slackEnabled', 'slackChannelName', 'whatsappEnabled', 'whatsappSenderLabel', 'emailEnabled', 'smsWebhookEnabled',
+          'enabled', 'frequency', 'retentionDays', 'retentionMaxCount', 'notifyOnSuccess', 'notifyOnFailure', 'includeStorageManifest', 'lastBackupAt', 'lastBackupStatus', 'lastBackupId'
+        ])
+        && (!('requireDailyWorkReportBeforeCheckout' in data) || data.requireDailyWorkReportBeforeCheckout is bool)
+        && (!('maxOptionalHolidays' in data) || (data.maxOptionalHolidays is number && data.maxOptionalHolidays >= 0 && data.maxOptionalHolidays <= 10))
+        && (!('lateMarksThreshold' in data) || (data.lateMarksThreshold is number && data.lateMarksThreshold >= 1 && data.lateMarksThreshold <= 20))
+        && (!('lateMarksAction' in data) || data.lateMarksAction in ['half_day', 'lop'])
+        && (!('carryForwardEnabled' in data) || data.carryForwardEnabled is bool)
+        && (!('maxCarryForwardPaid' in data) || (data.maxCarryForwardPaid is number && data.maxCarryForwardPaid >= 0 && data.maxCarryForwardPaid <= 90))
+        && (!('superAdminSelfApprovalMode' in data) || data.superAdminSelfApprovalMode in ['auto_audit', 'designated_approver'])
+        && (!('superAdminApproverUid' in data) || (data.superAdminApproverUid is string && data.superAdminApproverUid.size() <= 128))
+        && (!('rules' in data) || (data.rules is list && data.rules.size() <= 20))
+        && (!('enabled' in data) || data.enabled is bool)
+        && (!('frequency' in data) || data.frequency in ['hourly', 'daily', 'weekly'])
+        && (!('retentionDays' in data) || (data.retentionDays is number && data.retentionDays >= 1 && data.retentionDays <= 365))
+        && (!('retentionMaxCount' in data) || (data.retentionMaxCount is number && data.retentionMaxCount >= 1 && data.retentionMaxCount <= 200))
+        && (!('notifyOnSuccess' in data) || data.notifyOnSuccess is bool)
+        && (!('notifyOnFailure' in data) || data.notifyOnFailure is bool)
+        && (!('includeStorageManifest' in data) || data.includeStorageManifest is bool)
+        && (!('lastBackupAt' in data) || (data.lastBackupAt is string && data.lastBackupAt.size() <= 40))
+        && (!('lastBackupStatus' in data) || data.lastBackupStatus in ['success', 'failed'])
+        && (!('lastBackupId' in data) || (data.lastBackupId is string && data.lastBackupId.size() <= 128));
+    }
+
+    function isValidBackupRecord(data) {
+      return data.keys().hasAll([
+          'id', 'trigger', 'frequency', 'status', 'checksumSha256',
+          'storagePath', 'storageFileCount', 'totalRecords', 'sizeBytes',
+          'collectionCounts', 'createdByUid', 'createdByEmail', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'trigger', 'frequency', 'status', 'checksumSha256',
+          'storagePath', 'storageFileCount', 'totalRecords', 'sizeBytes',
+          'collectionCounts', 'snapshotJson', 'errorMessage',
+          'createdByUid', 'createdByEmail', 'createdAt'
+        ])
+        && isValidId(data.id)
+        && data.trigger in ['scheduled', 'manual']
+        && data.frequency in ['hourly', 'daily', 'weekly']
+        && data.status in ['success', 'failed']
+        && data.checksumSha256 is string && data.checksumSha256.size() <= 128
+        && data.storagePath is string && data.storagePath.size() <= 300
+        && data.storageFileCount is number && data.storageFileCount >= 0
+        && data.totalRecords is number && data.totalRecords >= 0
+        && data.sizeBytes is number && data.sizeBytes >= 0
+        && data.collectionCounts is map
+        && data.createdByUid is string && data.createdByUid.size() <= 128
+        && data.createdByEmail is string && data.createdByEmail.size() <= 254
+        && (!('snapshotJson' in data) || (data.snapshotJson is string && data.snapshotJson.size() <= 750000))
+        && (!('errorMessage' in data) || (data.errorMessage is string && data.errorMessage.size() <= 500));
+    }
+
+    function isValidAuditLog(data) {
+      return data.keys().hasAll(['id', 'actorUid', 'actorEmail', 'actorRole', 'action', 'targetCollection', 'targetId', 'summary', 'createdAt'])
+        && data.keys().hasOnly(['id', 'actorUid', 'actorEmail', 'actorRole', 'action', 'targetCollection', 'targetId', 'summary', 'createdAt'])
+        && isValidId(data.id)
+        && isValidId(data.actorUid)
+        && data.actorEmail is string && data.actorEmail.size() <= 254
+        && data.actorRole is string && data.actorRole.size() <= 40
+        && data.action is string && data.action.size() >= 2 && data.action.size() <= 120
+        && data.targetCollection is string && data.targetCollection.size() <= 80
+        && data.targetId is string && data.targetId.size() <= 128
+        && data.summary is string && data.summary.size() <= 500;
+    }
+
+    // 4. Collection Match Blocks
+    match /system/{docId} {
+      allow get: if isSignedIn() && isValidId(docId);
+      allow list: if false;
+      allow create: if isVerified() && docId == 'setup'
+        && !exists(/databases/$(database)/documents/system/setup)
+        && isValidSystemSetup(incoming())
+        && isValidTimestampCreate()
+        && incoming().superAdminUid == request.auth.uid
+        && existsAfter(/databases/$(database)/documents/admins/$(request.auth.uid))
+        && existsAfter(/databases/$(database)/documents/roles/$(request.auth.uid));
+      allow update: if isSuperAdmin() && docId == 'setup'
+        && isValidSystemSetup(incoming())
+        && isValidTimestampUpdate()
+        && incoming().superAdminUid == existing().superAdminUid;
+      allow delete: if false;
+    }
+
+    match /admins/{uid} {
+      allow get: if isSignedIn() && isValidId(uid) && (request.auth.uid == uid || isSuperAdmin());
+      allow list: if isSuperAdmin();
+      allow create: if isVerified() && isValidId(uid)
+        && isValidAdminRecord(incoming())
+        && incoming().createdAt == request.time
+        && incoming().uid == uid
+        && (
+          isSuperAdmin() ||
+          (uid == request.auth.uid && !exists(/databases/$(database)/documents/system/setup) && existsAfter(/databases/$(database)/documents/system/setup))
+        );
+      allow update: if false;
+      allow delete: if isSuperAdmin() && uid != request.auth.uid;
+    }
+
+    match /roles/{uid} {
+      allow get: if isSignedIn() && isValidId(uid) && (request.auth.uid == uid || isHR() || isSuperAdmin());
+      allow list: if isSuperAdmin() || isHR();
+      allow create: if isVerified() && isValidId(uid)
+        && isValidRoleAssignment(incoming())
+        && isValidTimestampCreate()
+        && incoming().uid == uid
+        && (
+          isSuperAdmin() ||
+          (isHR() && incoming().role != 'super_admin') ||
+          (uid == request.auth.uid && !exists(/databases/$(database)/documents/system/setup) && existsAfter(/databases/$(database)/documents/system/setup) && incoming().role == 'super_admin' && incoming().status == 'active') ||
+          (uid == request.auth.uid && 'inviteId' in incoming() && isValidId(incoming().inviteId)
+            && exists(/databases/$(database)/documents/invitations/$(incoming().inviteId))
+            && get(/databases/$(database)/documents/invitations/$(incoming().inviteId)).data.email == request.auth.token.email
+            && get(/databases/$(database)/documents/invitations/$(incoming().inviteId)).data.status == 'pending'
+            && incoming().role == get(/databases/$(database)/documents/invitations/$(incoming().inviteId)).data.role
+            && incoming().status == 'active'
+            && getAfter(/databases/$(database)/documents/invitations/$(incoming().inviteId)).data.status == 'accepted') ||
+          (uid == request.auth.uid && incoming().role == 'employee' && incoming().status == 'pending')
+        );
+      allow update: if isVerified() && isValidId(uid)
+        && isValidRoleAssignment(incoming())
+        && isValidTimestampUpdate()
+        && incoming().uid == existing().uid
+        && (
+          isSuperAdmin() ||
+          (isHR() && existing().role != 'super_admin' && incoming().role != 'super_admin' && incoming().diff(existing()).affectedKeys().hasOnly(['role', 'departmentId', 'teamId', 'teamLeadUid', 'status', 'updatedAt']))
+        );
+      allow delete: if isSuperAdmin() && uid != request.auth.uid;
+    }
+
+    match /users/{uid} {
+      allow get: if isSignedIn() && isValidId(uid) && (request.auth.uid == uid || isHR() || isSuperAdmin());
+      allow list: if isSuperAdmin() || isHR();
+      allow create: if isVerified() && isValidId(uid)
+        && isValidUserAccount(incoming())
+        && isValidTimestampCreate()
+        && (uid == request.auth.uid || isHR() || isSuperAdmin());
+      allow update: if isVerified() && isValidId(uid)
+        && isValidUserAccount(incoming())
+        && isValidTimestampUpdate()
+        && incoming().uid == existing().uid
+        && (
+          isSuperAdmin() ||
+          isHR() ||
+          (request.auth.uid == uid && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'employeeId', 'emailVerified', 'updatedAt']))
+        );
+      allow delete: if isSuperAdmin();
+    }
+
+    match /directory/{employeeId} {
+      allow get: if isVerified() && isValidId(employeeId) && (
+        isSuperAdmin() || isHR() || (isDeptLeadOrManager() && resource.data.departmentId == myDepartmentId())
+        || (isActiveMember() && (resource.data.uid == request.auth.uid || resource.data.departmentId == myDepartmentId()))
+      );
+      allow list: if isVerified() && (
+        isSuperAdmin() || isHR() || (isDeptLeadOrManager() && resource.data.departmentId == myDepartmentId())
+        || (isActiveMember() && resource.data.departmentId == myDepartmentId())
+      );
+      allow create: if (isHR() || isSuperAdmin()) && isValidId(employeeId)
+        && isValidDirectoryEntry(incoming())
+        && isValidTimestampCreate()
+        && incoming().id == employeeId;
+      allow update: if isVerified() && isValidId(employeeId)
+        && isValidDirectoryEntry(incoming())
+        && isValidTimestampUpdate()
+        && incoming().id == existing().id
+        && (
+          isHR() || isSuperAdmin() ||
+          (existing().uid == '' && incoming().uid == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['uid', 'updatedAt']))
+        );
+      allow delete: if isSuperAdmin();
+    }
+
+    match /employees/{employeeId} {
+      allow get: if isValidId(employeeId) && (
+        isSuperAdmin() || isHR() ||
+        (isVerified() && resource.data.uid == request.auth.uid) ||
+        (isVerified() && resource.data.email == request.auth.token.email) ||
+        (isDeptManager() && resource.data.departmentId == myDepartmentId()) ||
+        (isTeamLead() && (resource.data.teamLeadUid == request.auth.uid || resource.data.reportingManagerUid == request.auth.uid))
+      );
+      allow list: if isSuperAdmin() || isHR() ||
+        (isDeptManager() && resource.data.departmentId == myDepartmentId()) ||
+        (isTeamLead() && (resource.data.teamLeadUid == request.auth.uid || resource.data.reportingManagerUid == request.auth.uid)) ||
+        (isVerified() && resource.data.uid == request.auth.uid) ||
+        (isVerified() && resource.data.email == request.auth.token.email);
+      allow create: if (isHR() || isSuperAdmin()) && isValidId(employeeId)
+        && isValidEmployeeProfile(incoming())
+        && isValidTimestampCreate()
+        && incoming().id == employeeId;
+      allow update: if isVerified() && isValidId(employeeId)
+        && isValidEmployeeProfile(incoming())
+        && isValidTimestampUpdate()
+        && incoming().id == existing().id
+        && incoming().employeeCode == existing().employeeCode
+        && (
+          isSuperAdmin() ||
+          isHR() ||
+          (existing().email == request.auth.token.email && existing().uid == '' && incoming().uid == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['uid', 'updatedAt'])) ||
+          (existing().uid == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['phone', 'address', 'avatarUrl', 'emergencyContactName', 'emergencyContactPhone', 'emergencyContactRelation', 'timezone', 'birthdayOptOut', 'updatedAt']))
+        );
+      allow delete: if isSuperAdmin();
+    }
+
+    match /salaries/{employeeId} {
+      allow get: if isValidId(employeeId) && (
+        isSuperAdmin() || isHR() ||
+        (isVerified() && resource.data.uid == request.auth.uid)
+      );
+      allow list: if isSuperAdmin() || isHR() ||
+        (isVerified() && resource.data.uid == request.auth.uid);
+      allow create: if (isHR() || isSuperAdmin()) && isValidId(employeeId)
+        && isValidSalaryStructure(incoming())
+        && isValidTimestampCreate()
+        && incoming().employeeId == employeeId;
+      allow update: if (isHR() || isSuperAdmin()) && isValidId(employeeId)
+        && isValidSalaryStructure(incoming())
+        && isValidTimestampUpdate()
+        && incoming().employeeId == existing().employeeId;
+      allow delete: if isSuperAdmin();
+    }
+
+    match /invitations/{inviteId} {
+      allow get: if isValidId(inviteId) && (
+        isSuperAdmin() || isHR() ||
+        (isVerified() && resource.data.email == request.auth.token.email)
+      );
+      allow list: if isSuperAdmin() || isHR() ||
+        (isVerified() && resource.data.email == request.auth.token.email);
+      allow create: if (isHR() || isSuperAdmin()) && isValidId(inviteId)
+        && isValidInvitation(incoming())
+        && isValidTimestampCreate()
+        && incoming().id == inviteId
+        && incoming().invitedByUid == request.auth.uid
+        && incoming().status == 'pending';
+      allow update: if isVerified() && isValidId(inviteId)
+        && isValidInvitation(incoming())
+        && isValidTimestampUpdate()
+        && incoming().id == existing().id
+        && incoming().email == existing().email
+        && (
+          isSuperAdmin() ||
+          isHR() ||
+          (existing().status == 'pending' && existing().email == request.auth.token.email && incoming().status == 'accepted' && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']))
+        );
+      allow delete: if isSuperAdmin() || isHR();
+    }
+
+    match /departments/{departmentId} {
+      allow get: if isActiveMember() && isValidId(departmentId);
+      allow list: if isActiveMember() && (resource.data.id is string || resource.data.name is string);
+      allow create: if (isHR() || isSuperAdmin()) && isValidId(departmentId)
+        && isValidDepartment(incoming())
+        && isValidTimestampCreate()
+        && incoming().id == departmentId;
+      allow update: if (isHR() || isSuperAdmin()) && isValidId(departmentId)
+        && isValidDepartment(incoming())
+        && isValidTimestampUpdate()
+        && incoming().id == existing().id;
+      allow delete: if isSuperAdmin();
+    }
+
+    match /designations/{designationId} {
+      allow get: if isActiveMember() && isValidId(designationId);
+      allow list: if isActiveMember() && resource.data.id is string;
+      allow create: if (isHR() || isSuperAdmin()) && isValidId(designationId)
+        && isValidDesignation(incoming())
+        && isValidTimestampCreate()
+        && incoming().id == designationId;
+      allow update: if (isHR() || isSuperAdmin()) && isValidId(designationId)
+        && isValidDesignation(incoming())
+        && isValidTimestampUpdate()
+        && incoming().id == existing().id;
+      allow delete: if isSuperAdmin();
+    }
+
+    match /attendance/{attendanceId} {
+      allow get: if isValidId(attendanceId) && (
+        isSuperAdmin() || isHR() ||
+        (isDeptLeadOrManager() && resource.data.departmentId == myDepartmentId()) ||
+        (isVerified() && resource.data.uid == request.auth.uid)
+      );
+      allow list: if isSuperAdmin() || isHR() ||
+        (isDeptLeadOrManager() && resource.data.departmentId == myDepartmentId()) ||
+        (isVerified() && resource.data.uid == request.auth.uid);
+      allow create: if isVerified() && isValidId(attendanceId)
+        && isValidAttendanceRecord(incoming())
+        && isValidTimestampCreate()
+        && incoming().id == attendanceId
+        && (
+          isSuperAdmin() || isHR() ||
+          (isActiveMember()
+            && attendanceId == (request.auth.uid + '_' + incoming().date)
+            && incoming().uid == request.auth.uid
+            && (!('checkOutTime' in incoming()) || incoming().checkOutTime == '')) ||
+          (isDeptLeadOrManager() && incoming().departmentId == myDepartmentId() && ('correctionId' in incoming()) &&
+            existsAfter(/databases/$(database)/documents/attendanceCorrections/$(incoming().correctionId)) &&
+            getAfter(/databases/$(database)/documents/attendanceCorrections/$(incoming().correctionId)).data.status == 'approved' &&
+            getAfter(/databases/$(database)/documents/attendanceCorrections/$(incoming().correctionId)).data.uid == incoming().uid)
+        );
+      allow update: if isVerified() && isValidId(attendanceId)
+        && isValidAttendanceRecord(incoming())
+        && isValidTimestampUpdate()
+        && incoming().id == existing().id
+        && incoming().uid == existing().uid
+        && incoming().date == existing().date
+        && (
+          isSuperAdmin() || isHR() ||
+          (isActiveMember()
+            && existing().uid == request.auth.uid
+            && (!('checkOutTime' in existing()) || existing().checkOutTime == '')
+            && incoming().checkOutTime is string && incoming().checkOutTime.size() > 0
+            && incoming().diff(existing()).affectedKeys().hasOnly(['checkOutTime', 'breakMinutes', 'workingMinutes', 'isEarlyDeparture', 'earlyDepartureMinutes', 'officeTimezone', 'status', 'updatedAt'])) ||
+          (isDeptLeadOrManager() && existing().departmentId == myDepartmentId() && ('correctionId' in incoming()) &&
+            existsAfter(/databases/$(database)/documents/attendanceCorrections/$(incoming().correctionId)) &&
+            getAfter(/databases/$(database)/documents/attendanceCorrections/$(incoming().correctionId)).data.status == 'approved' &&
+            getAfter(/databases/$(database)/documents/attendanceCorrections/$(incoming().correctionId)).data.uid == existing().uid &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['checkInTime', 'checkOutTime', 'breakMinutes', 'actualLunchMinutes', 'workingMinutes', 'officeTimezone', 'correctionId', 'status', 'notes', 'updatedAt']))
+        );
+      allow delete: if isSuperAdmin();
+    }
+
+    match /attendanceCorrections/{correctionId} {
+      allow get: if isValidId(correctionId) && (
+        isSuperAdmin() || isHR() ||
+        (isDeptLeadOrManager() && resource.data.departmentId == myDepartmentId()) ||
+        (isVerified() && resource.data.uid == request.auth.uid)
+      );
+      allow list: if isSuperAdmin() || isHR() ||
+        (isDeptLeadOrManager() && resource.data.departmentId == myDepartmentId()) ||
+        (isVerified() && resource.data.uid == request.auth.uid);
+      allow create: if isActiveMember() && isValidId(correctionId)
+        && isValidAttendanceCorrection(incoming())
+        && isValidTimestampCreate()
+        && incoming().id == correctionId
+        && incoming().uid == request.auth.uid
+        && incoming().status == 'pending';
+      allow update: if isVerified() && isValidId(correctionId)
+        && isValidAttendanceCorrection(incoming())
+        && isValidTimestampUpdate()
+        && incoming().id == existing().id
+        && incoming().uid == existing().uid
+        && (
+          isSuperAdmin() ||
+          (existing().status == 'pending' && (isHR() || (isDeptLeadOrManager() && existing().departmentId == myDepartmentId()))
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'reviewedByUid', 'reviewNotes', 'updatedAt']))
+        );
+      allow delete: if isSuperAdmin();
+    }
+
+    match /holidays/{holidayId} {
+      allow get: if isActiveMember() && isValidId(holidayId);
+      allow list: if isActiveMember() && resource.data.id is string;
+      allow create: if (isHR() || isSuperAdmin()) && isValidId(holidayId)
+        && isValidHoliday(incoming())
+        && isValidTimestampCreate()
+        && incoming().id == holidayId;
+      allow update: if (isHR() || isSuperAdmin()) && isValidId(holidayId)
+        && isValidHoliday(incoming())
+        && isValidTimestampUpdate()
+        && incoming().id == existing().id;
+      allow delete: if isHR() || isSuperAdmin();
+    }
+
+    match /leaveBalances/{uid} {
+      allow get: if isValidId(uid) && (
+        isSuperAdmin() ||
+        (isVerified() && request.auth.uid == uid) ||
+        (isHR() && ('ownerRole' in resource.data) && resource.data.ownerRole != 'super_admin' && resource.data.departmentId != '__executive_private__') ||
+        (isDeptManager() && resource.data.departmentId == myDepartmentId() && resource.data.departmentId != '__executive_private__' && (!('ownerRole' in resource.data) || resource.data.ownerRole != 'super_admin')) ||
+        (isTeamLead() && resource.data.teamLeadUid == request.auth.uid && resource.data.departmentId != '__executive_private__' && (!('ownerRole' in resource.data) || resource.data.ownerRole != 'super_admin'))
+      );
+      allow list: if isSuperAdmin() ||
+        (isVerified() && resource.data.uid == request.auth.uid) ||
+        (isHR() && resource.data.ownerRole in ['employee', 'team_lead', 'dept_manager', 'hr_manager']) ||
+        (isDeptManager() && resource.data.departmentId == myDepartmentId() && myDepartmentId() != '__executive_private__') ||
+        (isTeamLead() && resource.data.teamLeadUid == request.auth.uid);
+      // Server-authoritative only (Firebase Admin SDK via /api/leaves/*)
+      allow create, update: if false;
+      allow delete: if isSuperAdmin();
+    }
+
+    match /leaveRequests/{leaveId} {
+      allow get: if isValidId(leaveId) && (
+        isSuperAdmin() ||
+        (isVerified() && resource.data.uid == request.auth.uid) ||
+        ((isHR() || isDeptManager() || isTeamLead()) && resource.data.reportingManagerUid == request.auth.uid && resource.data.uid != request.auth.uid) ||
+        (isHR() && resource.data.departmentId != '__executive_private__') ||
+        (isDeptManager() && resource.data.departmentId == myDepartmentId() && resource.data.departmentId != '__executive_private__') ||
+        (isTeamLead() && resource.data.teamLeadUid == request.auth.uid && resource.data.departmentId != '__executive_private__')
+      );
+      allow list: if isSuperAdmin() ||
+        (isVerified() && resource.data.uid == request.auth.uid) ||
+        ((isHR() || isDeptManager() || isTeamLead()) && resource.data.reportingManagerUid == request.auth.uid) ||
+        (isHR() && resource.data.departmentId != '__executive_private__') ||
+        (isDeptManager() && resource.data.departmentId == myDepartmentId() && myDepartmentId() != '__executive_private__') ||
+        (isTeamLead() && resource.data.teamLeadUid == request.auth.uid);
+      // Server-authoritative only (Firebase Admin SDK via /api/leaves/*)
+      allow create, update: if false;
+      allow delete: if isSuperAdmin();
+    }
+
+    match /payrollRuns/{runId} {
+      allow get: if isValidId(runId) && (isSuperAdmin() || isHR());
+      allow list: if isSuperAdmin() || isHR();
+      allow create: if (isHR() || isSuperAdmin()) && isValidId(runId)
+        && isValidPayrollRun(incoming())
+        && isValidTimestampCreate()
+        && incoming().id == runId
+        && incoming().processedByUid == request.auth.uid;
+      allow update: if (isHR() || isSuperAdmin()) && isValidId(runId)
+        && isValidPayrollRun(incoming())
+        && isValidTimestampUpdate()
+        && incoming().id == existing().id
+        && (isSuperAdmin() || existing().status != 'finalized');
+      allow delete: if isSuperAdmin();
+    }
+
+    match /payslips/{payslipId} {
+      allow get: if isValidId(payslipId) && (
+        isSuperAdmin() || isHR() || (isVerified() && resource.data.uid == request.auth.uid)
+      );
+      allow list: if isSuperAdmin() || isHR() || (isVerified() && resource.data.uid == request.auth.uid);
+      allow create: if (isHR() || isSuperAdmin()) && isValidId(payslipId)
+        && isValidPayslip(incoming())
+        && isValidTimestampCreate()
+        && incoming().id == payslipId;
+      allow update: if (isHR() || isSuperAdmin()) && isValidId(payslipId)
+        && isValidPayslip(incoming())
+        && isValidTimestampUpdate()
+        && incoming().id == existing().id;
+      allow delete: if isSuperAdmin();
+    }
+
+    match /jobs/{jobId} {
+      allow get: if isActiveMember() && isValidId(jobId);
+      allow list: if isActiveMember() && resource.data.id is string;
+      allow create: if (isHR() || isSuperAdmin()) && isValidId(jobId)
+        && isValidJobOpening(incoming())
+        && isValidTimestampCreate()
+        && incoming().id == jobId
+        && incoming().createdByUid == request.auth.uid;
+      allow update: if (isHR() || isSuperAdmin()) && isValidId(jobId)
+        && isValidJobOpening(incoming())
+        && isValidTimestampUpdate()
+        && incoming().id == existing().id;
+      allow delete: if isHR() || isSuperAdmin();
+    }
+
+    match /candidates/{candidateId} {
+      allow get: if isValidId(candidateId) && (isSuperAdmin() || isHR() || isDeptLeadOrManager());
+      allow list: if isSuperAdmin() || isHR() || isDeptLeadOrManager();
+      allow create: if (isHR() || isSuperAdmin()) && isValidId(candidateId)
+        && isValidCandidate(incoming())
+        && isValidTimestampCreate()
+        && incoming().id == candidateId
+        && incoming().createdByUid == request.auth.uid;
+      allow update: if isVerified() && isValidId(candidateId)
+        && isValidCandidate(incoming())
+        && isValidTimestampUpdate()
+        && incoming().id == existing().id
+        && (
+          isSuperAdmin() || isHR() ||
+          (isDeptLeadOrManager() && incoming().diff(existing()).affectedKeys().hasOnly(['interviewFeedback', 'rating', 'updatedAt']))
+        );
+      allow delete: if isHR() || isSuperAdmin();
+    }
+
+    match /onboarding/{onboardingId} {
+      allow get: if isValidId(onboardingId) && (
+        isSuperAdmin() || isHR() || (isVerified() && resource.data.uid == request.auth.uid) || (isVerified() && resource.data.email == request.auth.token.email)
+      );
+      allow list: if isSuperAdmin() || isHR() || (isVerified() && resource.data.uid == request.auth.uid) || (isVerified() && resource.data.email == request.auth.token.email);
+      allow create: if (isHR() || isSuperAdmin()) && isValidId(onboardingId)
+        && isValidOnboardingCase(incoming())
+        && isValidTimestampCreate()
+        && incoming().id == onboardingId;
+      allow update: if isVerified() && isValidId(onboardingId)
+        && isValidOnboardingCase(incoming())
+        && isValidTimestampUpdate()
+        && incoming().id == existing().id
+        && (
+          isSuperAdmin() || isHR() ||
+          (existing().email == request.auth.token.email && existing().uid == '' && incoming().uid == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['uid', 'accountCreated', 'updatedAt'])) ||
+          (existing().uid == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['policyAcknowledged', 'trainingChecklist', 'progressPercent', 'updatedAt']))
+        );
+      allow delete: if isSuperAdmin();
+    }
+
+    match /offboarding/{offboardingId} {
+      allow get: if isValidId(offboardingId) && (
+        isSuperAdmin() || isHR() ||
+        (isDeptLeadOrManager() && resource.data.departmentId == myDepartmentId()) ||
+        (isVerified() && resource.data.uid == request.auth.uid)
+      );
+      allow list: if isSuperAdmin() || isHR() ||
+        (isDeptLeadOrManager() && resource.data.departmentId == myDepartmentId()) ||
+        (isVerified() && resource.data.uid == request.auth.uid);
+      allow create: if isActiveMember() && isValidId(offboardingId)
+        && isValidOffboardingCase(incoming())
+        && isValidTimestampCreate()
+        && incoming().id == offboardingId
+        && (isSuperAdmin() || isHR() || (incoming().uid == request.auth.uid && incoming().approvalStatus == 'pending' && incoming().accountDeactivated == false));
+      allow update: if (isHR() || isSuperAdmin()) && isValidId(offboardingId)
+        && isValidOffboardingCase(incoming())
+        && isValidTimestampUpdate()
+        && incoming().id == existing().id
+        && incoming().uid == existing().uid;
+      allow delete: if isSuperAdmin();
+    }
+
+    match /goals/{goalId} {
+      allow get: if isValidId(goalId) && (
+        isSuperAdmin() || isHR() ||
+        (isDeptLeadOrManager() && resource.data.departmentId == myDepartmentId()) ||
+        (isVerified() && resource.data.uid == request.auth.uid)
+      );
+      allow list: if isSuperAdmin() || isHR() ||
+        (isDeptLeadOrManager() && resource.data.departmentId == myDepartmentId()) ||
+        (isVerified() && resource.data.uid == request.auth.uid);
+      allow create: if isActiveMember() && isValidId(goalId)
+        && isValidPerformanceGoal(incoming())
+        && isValidTimestampCreate()
+        && incoming().id == goalId
+        && incoming().createdByUid == request.auth.uid
+        && (isSuperAdmin() || isHR() || (isDeptLeadOrManager() && incoming().departmentId == myDepartmentId()) || incoming().uid == request.auth.uid);
+      allow update: if isVerified() && isValidId(goalId)
+        && isValidPerformanceGoal(incoming())
+        && isValidTimestampUpdate()
+        && incoming().id == existing().id
+        && incoming().uid == existing().uid
+        && (
+          isSuperAdmin() || isHR() ||
+          (isDeptLeadOrManager() && existing().departmentId == myDepartmentId()) ||
+          (existing().uid == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['progress', 'status', 'description', 'updatedAt']))
+        );
+      allow delete: if isHR() || isSuperAdmin();
+    }
+
+    match /reviews/{reviewId} {
+      allow get: if isValidId(reviewId) && (
+        isSuperAdmin() || isHR() ||
+        (isDeptLeadOrManager() && resource.data.departmentId == myDepartmentId()) ||
+        (isVerified() && resource.data.uid == request.auth.uid)
+      );
+      allow list: if isSuperAdmin() || isHR() ||
+        (isDeptLeadOrManager() && resource.data.departmentId == myDepartmentId()) ||
+        (isVerified() && resource.data.uid == request.auth.uid);
+      allow create: if (isHR() || isSuperAdmin() || (isDeptLeadOrManager() && incoming().departmentId == myDepartmentId())) && isValidId(reviewId)
+        && isValidPerformanceReview(incoming())
+        && isValidTimestampCreate()
+        && incoming().id == reviewId
+        && incoming().reviewerUid == request.auth.uid;
+      allow update: if isVerified() && isValidId(reviewId)
+        && isValidPerformanceReview(incoming())
+        && isValidTimestampUpdate()
+        && incoming().id == existing().id
+        && incoming().uid == existing().uid
+        && (
+          isSuperAdmin() || isHR() ||
+          (isDeptLeadOrManager() && existing().departmentId == myDepartmentId()) ||
+          (existing().uid == request.auth.uid && existing().status == 'submitted' && incoming().status == 'acknowledged' && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']))
+        );
+      allow delete: if isSuperAdmin();
+    }
+
+    match /announcements/{announcementId} {
+      allow get: if isActiveMember() && isValidId(announcementId) && canReadAnnouncement(resource.data);
+      allow list: if isActiveMember() && resource.data.id is string && canReadAnnouncement(resource.data);
+      allow create: if isActiveMember() && isValidId(announcementId)
+        && isValidAnnouncement(incoming())
+        && isValidTimestampCreate()
+        && incoming().id == announcementId
+        && incoming().authorUid == request.auth.uid
+        && (
+          isHR() || isSuperAdmin() ||
+          (isTeamLead()
+            && incoming().audience == 'team'
+            && incoming().pinned == false
+            && (!('teamLeadUid' in incoming()) || incoming().teamLeadUid == request.auth.uid)
+            && (!('departmentId' in incoming()) || incoming().departmentId == '' || incoming().departmentId == myDepartmentId()))
+        );
+      allow update: if isActiveMember() && isValidId(announcementId)
+        && isValidAnnouncement(incoming())
+        && isValidTimestampUpdate()
+        && incoming().id == existing().id
+        && (
+          isHR() || isSuperAdmin() ||
+          (isTeamLead()
+            && existing().authorUid == request.auth.uid
+            && existing().audience == 'team'
+            && incoming().audience == 'team'
+            && incoming().authorUid == existing().authorUid
+            && incoming().pinned == false)
+        );
+      allow delete: if isHR() || isSuperAdmin() ||
+        (isTeamLead() && resource.data.authorUid == request.auth.uid && resource.data.audience == 'team');
+    }
+
+    match /documents/{docId} {
+      allow get: if isValidId(docId) && (
+        isSuperAdmin() || isHR() || (isVerified() && resource.data.uid == request.auth.uid)
+      );
+      allow list: if isSuperAdmin() || isHR() || (isVerified() && resource.data.uid == request.auth.uid);
+      allow create: if isActiveMember() && isValidId(docId)
+        && isValidEmployeeDocument(incoming())
+        && isValidTimestampCreate()
+        && incoming().id == docId
+        && incoming().uploadedByUid == request.auth.uid
+        && (isSuperAdmin() || isHR() || (incoming().uid == request.auth.uid && incoming().verified == false));
+      allow update: if (isHR() || isSuperAdmin()) && isValidId(docId)
+        && isValidEmployeeDocument(incoming())
+        && isValidTimestampUpdate()
+        && incoming().id == existing().id;
+      allow delete: if isSuperAdmin() || isHR() || (isVerified() && resource.data.uid == request.auth.uid && resource.data.verified == false);
+    }
+
+    match /tasks/{taskId} {
+      allow get: if isVerified() && isValidId(taskId) && (
+        isSuperAdmin() || isHR() ||
+        (isDeptLeadOrManager() && resource.data.departmentId == myDepartmentId()) ||
+        resource.data.assigneeUid == request.auth.uid
+      );
+      allow list: if isVerified() && (
+        isSuperAdmin() || isHR() ||
+        (isDeptLeadOrManager() && resource.data.departmentId == myDepartmentId()) ||
+        resource.data.assigneeUid == request.auth.uid
+      );
+      allow create: if isActiveMember() && isValidId(taskId)
+        && incoming().keys().hasAll(['id', 'title', 'description', 'assigneeUid', 'assigneeName', 'assigneeEmployeeId', 'departmentId', 'assignedByUid', 'assignedByName', 'priority', 'status', 'dueDate', 'createdAt', 'updatedAt'])
+        && incoming().keys().hasOnly([
+          'id', 'title', 'description', 'project', 'clientName',
+          'assigneeUid', 'assigneeName', 'assigneeEmployeeId', 'departmentId',
+          'assignedByUid', 'assignedByName', 'priority', 'status', 'dueDate',
+          'completionNote', 'completedAt',
+          'timerRunning', 'timerStartedAt', 'activeTimerUid', 'trackedSeconds',
+          'comments', 'attachments', 'createdAt', 'updatedAt'
+        ])
+        && incoming().id == taskId
+        && incoming().title is string && incoming().title.size() >= 2 && incoming().title.size() <= 140
+        && incoming().description is string && incoming().description.size() <= 2000
+        && (!('project' in incoming()) || (incoming().project is string && incoming().project.size() <= 160))
+        && (!('clientName' in incoming()) || (incoming().clientName is string && incoming().clientName.size() <= 160))
+        && isValidId(incoming().assigneeUid)
+        && isValidId(incoming().assignedByUid)
+        && incoming().assigneeName is string && incoming().assigneeName.size() <= 160
+        && incoming().assignedByName is string && incoming().assignedByName.size() <= 160
+        && incoming().departmentId is string && incoming().departmentId.size() <= 128
+        && incoming().priority in ['low', 'medium', 'high', 'urgent']
+        && incoming().status == 'todo'
+        && incoming().dueDate is string && incoming().dueDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && (!('timerRunning' in incoming()) || incoming().timerRunning is bool)
+        && (!('timerStartedAt' in incoming()) || incoming().timerStartedAt == null || (incoming().timerStartedAt is string && incoming().timerStartedAt.size() <= 64))
+        && (!('activeTimerUid' in incoming()) || (incoming().activeTimerUid is string && incoming().activeTimerUid.size() <= 128))
+        && (!('trackedSeconds' in incoming()) || (incoming().trackedSeconds is number && incoming().trackedSeconds >= 0))
+        && (!('comments' in incoming()) || (incoming().comments is list && incoming().comments.size() <= 100))
+        && (!('attachments' in incoming()) || (incoming().attachments is list && incoming().attachments.size() <= 20))
+        && incoming().assignedByUid == request.auth.uid
+        && isValidTimestampCreate()
+        && (isSuperAdmin() || isHR() || (isDeptLeadOrManager() && incoming().departmentId == myDepartmentId()));
+      allow update: if isVerified() && isValidId(taskId)
+        && incoming().id == existing().id
+        && isValidTimestampUpdate()
+        && (!('comments' in incoming()) || (incoming().comments is list && incoming().comments.size() <= 100))
+        && (!('attachments' in incoming()) || (incoming().attachments is list && incoming().attachments.size() <= 20))
+        && (!('trackedSeconds' in incoming()) || (incoming().trackedSeconds is number && incoming().trackedSeconds >= 0))
+        && (
+          isSuperAdmin() || isHR() ||
+          (isDeptLeadOrManager() && existing().departmentId == myDepartmentId()) ||
+          (existing().assigneeUid == request.auth.uid
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'status', 'completionNote', 'completedAt',
+              'timerRunning', 'timerStartedAt', 'activeTimerUid', 'trackedSeconds',
+              'comments', 'attachments', 'updatedAt'
+            ])
+            && incoming().status in ['todo', 'in_progress', 'review', 'completed'])
+        );
+      allow delete: if isSuperAdmin() || isHR() ||
+        (isDeptLeadOrManager() && resource.data.departmentId == myDepartmentId());
+    }
+
+    match /notifications/{notificationId} {
+      allow get: if isVerified() && isValidId(notificationId) && (
+        resource.data.recipientUid == request.auth.uid || isSuperAdmin() || isHR()
+      );
+      allow list: if isVerified() && (
+        resource.data.recipientUid == request.auth.uid || isSuperAdmin() || isHR()
+      );
+      allow create: if isActiveMember() && isValidId(notificationId)
+        && isValidNotification(incoming())
+        && isValidTimestampCreate()
+        && incoming().id == notificationId
+        && incoming().read == false
+        && (
+          isSuperAdmin() || isHR() || isDeptLeadOrManager() || incoming().recipientUid == request.auth.uid ||
+          (incoming().type == 'task' && 'taskId' in incoming()
+            && exists(/databases/$(database)/documents/tasks/$(incoming().taskId))
+            && get(/databases/$(database)/documents/tasks/$(incoming().taskId)).data.assigneeUid == request.auth.uid
+            && get(/databases/$(database)/documents/tasks/$(incoming().taskId)).data.assignedByUid == incoming().recipientUid)
+        );
+      allow update: if isVerified() && isValidId(notificationId)
+        && isValidNotification(incoming())
+        && isValidTimestampUpdate()
+        && incoming().id == existing().id
+        && incoming().recipientUid == existing().recipientUid
+        && existing().recipientUid == request.auth.uid
+        && incoming().diff(existing()).affectedKeys().hasOnly(['read', 'updatedAt']);
+      allow delete: if isVerified() && resource.data.recipientUid == request.auth.uid;
+    }
+
+    match /notificationPrefs/{uid} {
+      allow get: if isVerified() && isValidId(uid) && (request.auth.uid == uid || isSuperAdmin());
+      allow list: if isSuperAdmin();
+      allow create, update: if isVerified() && isValidId(uid)
+        && isValidNotificationPref(incoming())
+        && incoming().uid == uid
+        && incoming().updatedAt == request.time
+        && (request.auth.uid == uid || isSuperAdmin());
+      allow delete: if false;
+    }
+
+    match /settings/{settingId} {
+      allow get: if isActiveMember() && isValidId(settingId);
+      allow list: if isActiveMember() && resource.data.id is string;
+      allow create, update: if isValidId(settingId)
+        && (settingId == 'backupConfig' ? isSuperAdmin() : (isSuperAdmin() || isHR()))
+        && isValidHrSetting(incoming())
+        && incoming().id == settingId
+        && incoming().updatedAt == request.time;
+      allow delete: if false;
+    }
+
+
+
+    match /breakSessions/{breakId} {
+      allow get: if isVerified() && isValidId(breakId) && (resource.data.uid == request.auth.uid || isSuperAdmin() || isHR() || (isDeptLeadOrManager() && resource.data.departmentId == myDepartmentId()));
+      allow list: if isVerified() && (isSuperAdmin() || isHR() || (isDeptLeadOrManager() && resource.data.departmentId == myDepartmentId()) || resource.data.uid == request.auth.uid);
+      allow create: if (isSuperAdmin() || isHR() || (isActiveMember() && incoming().uid == request.auth.uid)) && isValidId(breakId)
+        && incoming().id == breakId
+        && incoming().employeeName is string && incoming().employeeName.size() <= 120
+        && incoming().date is string && incoming().date.size() == 10
+        && incoming().type in ['Lunch', 'Tea/Short', 'Personal']
+        && incoming().startAt is string && incoming().status == 'active'
+        && incoming().createdAt == request.time && incoming().updatedAt == request.time;
+      allow update: if (isSuperAdmin() || isHR() || (isActiveMember() && resource.data.uid == request.auth.uid))
+        && resource.data.status == 'active'
+        && incoming().id == resource.data.id
+        && incoming().uid == resource.data.uid && incoming().status == 'ended'
+        && incoming().diff(resource.data).affectedKeys().hasOnly(['endAt', 'status', 'updatedAt'])
+        && incoming().endAt is string && incoming().updatedAt == request.time;
+      allow delete: if isSuperAdmin();
+    }
+
+    match /dailyWorkReports/{reportId} {
+      allow get: if isVerified() && isValidId(reportId) && (resource.data.uid == request.auth.uid || isSuperAdmin() || isHR() || (isDeptLeadOrManager() && resource.data.departmentId == myDepartmentId()));
+      allow list: if isVerified() && (isSuperAdmin() || isHR() || (isDeptLeadOrManager() && resource.data.departmentId == myDepartmentId()) || resource.data.uid == request.auth.uid);
+      allow create: if isActiveMember() && isValidId(reportId)
+        && incoming().id == reportId && incoming().uid == request.auth.uid
+        && incoming().employeeName is string && incoming().employeeName.size() <= 120
+        && incoming().departmentId is string && incoming().date is string && incoming().date.size() == 10
+        && incoming().project is string && incoming().project.size() >= 1 && incoming().project.size() <= 180
+        && incoming().description is string && incoming().description.size() >= 1 && incoming().description.size() <= 3000
+        && incoming().minutes is number && incoming().minutes > 0 && incoming().minutes <= 1440
+        && incoming().status in ['done', 'in_progress', 'blocked']
+        && incoming().blockers is string && incoming().blockers.size() <= 1500
+        && incoming().tomorrow is string && incoming().tomorrow.size() <= 1500
+        && incoming().reviewStatus == 'submitted'
+        && (!('reviewerComment' in incoming()) || (incoming().reviewerComment is string && incoming().reviewerComment.size() <= 1500))
+        && incoming().createdAt == request.time && incoming().updatedAt == request.time;
+      allow update: if isVerified() && incoming().id == resource.data.id && incoming().uid == resource.data.uid
+        && incoming().updatedAt == request.time && (
+          ((isSuperAdmin() || isHR() || (isDeptLeadOrManager() && resource.data.departmentId == myDepartmentId()))
+            && incoming().diff(resource.data).affectedKeys().hasOnly(['reviewStatus', 'reviewerComment', 'updatedAt'])
+            && incoming().reviewStatus in ['approved', 'rejected', 'changes_requested']) ||
+          (resource.data.uid == request.auth.uid && resource.data.reviewStatus in ['rejected', 'changes_requested']
+            && incoming().diff(resource.data).affectedKeys().hasOnly(['project', 'taskId', 'description', 'minutes', 'status', 'blockers', 'tomorrow', 'reviewStatus', 'reviewerComment', 'updatedAt'])
+            && incoming().reviewStatus == 'submitted')
+        );
+      allow delete: if isSuperAdmin() || isHR();
+    }
+
+    match /meetingLogs/{meetingId} {
+      allow get: if isVerified() && isValidId(meetingId) && (resource.data.uid == request.auth.uid || isSuperAdmin() || isHR() || (isDeptLeadOrManager() && resource.data.departmentId == myDepartmentId()));
+      allow list: if isVerified() && (isSuperAdmin() || isHR() || (isDeptLeadOrManager() && resource.data.departmentId == myDepartmentId()) || resource.data.uid == request.auth.uid);
+      allow create: if isActiveMember() && isValidId(meetingId)
+        && incoming().id == meetingId && incoming().uid is string
+        && incoming().employeeName is string && incoming().employeeName.size() <= 120
+        && incoming().departmentId is string && incoming().date is string && incoming().date.size() == 10
+        && incoming().type in ['Management', 'Client', 'Internal']
+        && incoming().withWhom is string && incoming().withWhom.size() >= 1 && incoming().withWhom.size() <= 200
+        && incoming().purpose is string && incoming().purpose.size() >= 1 && incoming().purpose.size() <= 2000
+        && incoming().startAt is string
+        && ((incoming().uid == request.auth.uid && incoming().status == 'active')
+          || ((isSuperAdmin() || isHR() || (isDeptLeadOrManager() && incoming().departmentId == myDepartmentId()))
+            && incoming().createdByUid == request.auth.uid && incoming().status == 'submitted'
+            && incoming().endAt is string))
+        && incoming().createdAt == request.time && incoming().updatedAt == request.time;
+      allow update: if isVerified() && incoming().id == resource.data.id && incoming().uid == resource.data.uid
+        && incoming().updatedAt == request.time && (
+          (resource.data.uid == request.auth.uid && resource.data.status == 'active'
+            && incoming().status == 'submitted'
+            && incoming().diff(resource.data).affectedKeys().hasOnly(['endAt', 'status', 'updatedAt'])
+            && incoming().endAt is string) ||
+          ((isSuperAdmin() || isHR() || (isDeptLeadOrManager() && resource.data.departmentId == myDepartmentId()))
+            && resource.data.status == 'submitted' && incoming().status in ['confirmed', 'rejected']
+            && incoming().diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']))
+        );
+      allow delete: if isSuperAdmin();
+    }
+
+
+
+
+
+    match /announcementReads/{readId} {
+      allow get: if isVerified() && (resource.data.uid == request.auth.uid || isSuperAdmin() || isHR());
+      allow list: if isVerified() && (isSuperAdmin() || isHR() || resource.data.uid == request.auth.uid);
+      allow create: if isActiveMember() && isValidId(readId)
+        && incoming().id == readId && incoming().uid == request.auth.uid
+        && incoming().announcementId is string && incoming().announcementId.size() <= 128
+        && incoming().title is string && incoming().title.size() <= 240
+        && incoming().category in ['notice', 'holiday', 'birthday', 'anniversary', 'event', 'policy']
+        && incoming().readAt == request.time && incoming().acknowledgedAt == request.time;
+      allow update, delete: if false;
+    }
+
+    match /optionalHolidaySelections/{selectionId} {
+      allow get: if isVerified() && (resource.data.uid == request.auth.uid || isSuperAdmin() || isHR() || (isDeptLeadOrManager() && resource.data.departmentId == myDepartmentId()));
+      allow list: if isVerified() && (isSuperAdmin() || isHR() || (isDeptLeadOrManager() && resource.data.departmentId == myDepartmentId()) || resource.data.uid == request.auth.uid);
+      allow create: if isActiveMember() && isValidId(selectionId)
+        && incoming().id == selectionId
+        && incoming().uid == request.auth.uid
+        && incoming().holidayId is string
+        && exists(/databases/$(database)/documents/holidays/$(incoming().holidayId))
+        && get(/databases/$(database)/documents/holidays/$(incoming().holidayId)).data.type == 'optional'
+        && incoming().selectedAt == request.time;
+      allow update, delete: if false;
+    }
+
+    match /compOffRequests/{requestId} {
+      allow get, list: if isVerified() && (isSuperAdmin() || isHR() || resource.data.uid == request.auth.uid || (isDeptLeadOrManager() && resource.data.departmentId == myDepartmentId()));
+      allow create: if isActiveMember() && isValidId(requestId) && incoming().id == requestId
+        && incoming().uid == request.auth.uid && incoming().employeeName is string && incoming().departmentId is string
+        && incoming().date is string && incoming().date.size() == 10
+        && incoming().action in ['earn', 'use'] && incoming().days is number && incoming().days > 0 && incoming().days <= 2
+        && incoming().reason is string && incoming().reason.size() >= 3 && incoming().reason.size() <= 1500
+        && incoming().status == 'pending' && incoming().createdAt == request.time && incoming().updatedAt == request.time;
+      allow update: if isVerified() && incoming().id == existing().id && incoming().uid == existing().uid
+        && incoming().updatedAt == request.time && existing().status == 'pending'
+        && (isSuperAdmin() || isHR() || (isDeptLeadOrManager() && existing().departmentId == myDepartmentId()))
+        && incoming().status in ['approved', 'rejected']
+        && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'reviewedByUid', 'reviewedAt', 'updatedAt']);
+      allow delete: if isSuperAdmin() || isHR();
+    }
+
+    match /compOffBalances/{uid} {
+      allow get: if isVerified() && (request.auth.uid == uid || isSuperAdmin() || isHR() || (isDeptLeadOrManager() && resource.data.departmentId == myDepartmentId()));
+      allow list: if isSuperAdmin() || isHR() || (isDeptLeadOrManager() && resource.data.departmentId == myDepartmentId());
+      allow create, update: if isVerified() && (isSuperAdmin() || isHR() || (isDeptLeadOrManager() && incoming().departmentId == myDepartmentId()))
+        && incoming().uid == uid && incoming().availableDays is number && incoming().availableDays >= 0
+        && incoming().availableDays <= 365;
+      allow delete: if isSuperAdmin() || isHR();
+    }
+
+    match /wfhRequests/{requestId} {
+      allow get: if isVerified() && (isSuperAdmin() || isHR() || resource.data.uid == request.auth.uid || (isDeptLeadOrManager() && resource.data.departmentId == myDepartmentId()));
+      allow list: if isVerified() && (isSuperAdmin() || isHR() || resource.data.uid == request.auth.uid || (isDeptLeadOrManager() && resource.data.departmentId == myDepartmentId()));
+      allow create: if isActiveMember() && isValidId(requestId)
+        && incoming().id == requestId && incoming().uid == request.auth.uid
+        && incoming().employeeName is string && incoming().departmentId is string
+        && incoming().date is string && incoming().date.size() == 10
+        && incoming().reason is string && incoming().reason.size() >= 5 && incoming().reason.size() <= 1500
+        && incoming().status == 'pending' && incoming().createdAt == request.time && incoming().updatedAt == request.time;
+      allow update: if isVerified() && incoming().id == existing().id && incoming().uid == existing().uid
+        && incoming().updatedAt == request.time
+        && ((isSuperAdmin() || isHR() || (isDeptLeadOrManager() && existing().departmentId == myDepartmentId()))
+          && existing().status == 'pending' && incoming().status in ['approved', 'rejected']
+          && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'reviewedByUid', 'reviewedAt', 'updatedAt']));
+      allow delete: if isSuperAdmin() || isHR();
+    }
+
+    match /overtimeRequests/{requestId} {
+      allow get, list: if isVerified() && (isSuperAdmin() || isHR() || resource.data.uid == request.auth.uid || (isDeptLeadOrManager() && resource.data.departmentId == myDepartmentId()));
+      allow create: if isActiveMember() && isValidId(requestId) && incoming().id == requestId
+        && incoming().uid == request.auth.uid && incoming().employeeName is string && incoming().departmentId is string
+        && incoming().date is string && incoming().date.size() == 10
+        && incoming().hours is number && incoming().hours > 0 && incoming().hours <= 24
+        && incoming().reason is string && incoming().reason.size() >= 3 && incoming().reason.size() <= 1500
+        && incoming().requestType == 'overtime' && incoming().status == 'pending'
+        && incoming().createdAt == request.time && incoming().updatedAt == request.time;
+      allow update: if isVerified() && incoming().id == existing().id && incoming().uid == existing().uid
+        && incoming().updatedAt == request.time && existing().status == 'pending'
+        && (isSuperAdmin() || isHR() || (isDeptLeadOrManager() && existing().departmentId == myDepartmentId()))
+        && incoming().status in ['approved', 'rejected']
+        && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'reviewedByUid', 'reviewedAt', 'updatedAt']);
+      allow delete: if isSuperAdmin() || isHR();
+    }
+
+    match /timesheets/{timesheetId} {
+      allow get, list: if isVerified() && (isSuperAdmin() || isHR() || resource.data.uid == request.auth.uid || (isDeptLeadOrManager() && resource.data.departmentId == myDepartmentId()));
+      allow create: if isActiveMember() && isValidId(timesheetId) && incoming().id == timesheetId
+        && incoming().uid == request.auth.uid && incoming().employeeName is string && incoming().departmentId is string
+        && incoming().date is string && incoming().date.size() == 10
+        && incoming().project is string && incoming().project.size() >= 1 && incoming().project.size() <= 180
+        && incoming().description is string && incoming().description.size() <= 2000
+        && incoming().minutes is number && incoming().minutes > 0 && incoming().minutes <= 1440
+        && incoming().status == 'submitted' && incoming().createdAt == request.time && incoming().updatedAt == request.time;
+      allow update: if isVerified() && incoming().id == existing().id && incoming().uid == existing().uid
+        && incoming().updatedAt == request.time
+        && ((isSuperAdmin() || isHR() || (isDeptLeadOrManager() && existing().departmentId == myDepartmentId()))
+          && existing().status == 'submitted' && incoming().status in ['approved', 'rejected']
+          && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'reviewedByUid', 'reviewedAt', 'updatedAt']));
+      allow delete: if isSuperAdmin() || isHR();
+    }
+
+    match /expenseClaims/{claimId} {
+      allow get, list: if isVerified() && (isSuperAdmin() || isHR() || resource.data.uid == request.auth.uid || (isDeptLeadOrManager() && resource.data.departmentId == myDepartmentId()));
+      allow create: if isActiveMember() && isValidId(claimId) && incoming().id == claimId
+        && incoming().uid == request.auth.uid && incoming().employeeName is string && incoming().departmentId is string
+        && incoming().title is string && incoming().title.size() >= 2 && incoming().title.size() <= 160
+        && incoming().amount is number && incoming().amount > 0
+        && incoming().currency is string && incoming().currency.size() >= 3 && incoming().currency.size() <= 6
+        && incoming().expenseDate is string && incoming().expenseDate.size() == 10
+        && incoming().notes is string && incoming().notes.size() <= 1500
+        && incoming().status == 'pending' && incoming().createdAt == request.time && incoming().updatedAt == request.time;
+      allow update: if isVerified() && incoming().id == existing().id && incoming().uid == existing().uid
+        && incoming().updatedAt == request.time
+        && (
+          (existing().status == 'pending'
+            && (isSuperAdmin() || isHR() || (isDeptLeadOrManager() && existing().departmentId == myDepartmentId()))
+            && incoming().status in ['approved', 'rejected']
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'reviewedByUid', 'reviewedAt', 'updatedAt']))
+          || (existing().status == 'approved'
+            && (isSuperAdmin() || isHR())
+            && incoming().status == 'reconciled'
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'utrRef', 'batchRef', 'reconciledAt', 'reconciledByUid', 'updatedAt']))
+        );
+      allow delete: if isSuperAdmin() || isHR();
+    }
+
+    match /assets/{assetId} {
+      allow get: if isVerified() && (isSuperAdmin() || isHR() || resource.data.assignedToUid == request.auth.uid);
+      allow list: if isVerified() && (isSuperAdmin() || isHR() || resource.data.assignedToUid == request.auth.uid);
+      allow create: if (isSuperAdmin() || isHR()) && isValidId(assetId) && incoming().id == assetId
+        && incoming().assetTag is string && incoming().assetTag.size() >= 2 && incoming().assetTag.size() <= 100
+        && incoming().title is string && incoming().title.size() >= 2 && incoming().title.size() <= 120
+        && incoming().assignedToUid is string && incoming().assignedToName is string
+        && incoming().departmentId is string && incoming().status == 'assigned'
+        && incoming().createdAt == request.time && incoming().updatedAt == request.time;
+      allow update: if (isSuperAdmin() || isHR()) && incoming().id == existing().id && incoming().updatedAt == request.time;
+      allow delete: if isSuperAdmin() || isHR();
+    }
+
+
+    match /feedback360/{feedbackId} {
+      allow get: if isVerified() && (resource.data.uid == request.auth.uid || resource.data.recipientUid == request.auth.uid || isSuperAdmin() || isHR() || (isDeptLeadOrManager() && resource.data.departmentId == myDepartmentId()));
+      allow list: if isVerified() && (isSuperAdmin() || isHR() || (isDeptLeadOrManager() && resource.data.departmentId == myDepartmentId()) || resource.data.recipientUid == request.auth.uid || resource.data.uid == request.auth.uid);
+      allow create: if isActiveMember() && isValidId(feedbackId) && incoming().id == feedbackId
+        && incoming().uid == request.auth.uid && incoming().employeeName is string
+        && incoming().recipientUid is string && incoming().recipientName is string
+        && incoming().departmentId is string && incoming().feedbackType in ['peer', 'manager', 'direct_report']
+        && incoming().rating is number && incoming().rating >= 1 && incoming().rating <= 5
+        && incoming().strengths is string && incoming().strengths.size() >= 2 && incoming().strengths.size() <= 2000
+        && incoming().improvementAreas is string && incoming().improvementAreas.size() <= 1500
+        && incoming().status == 'submitted' && incoming().createdAt == request.time && incoming().updatedAt == request.time;
+      allow update, delete: if isSuperAdmin() || isHR();
+    }
+
+    match /helpdeskTickets/{ticketId} {
+      allow get, list: if isVerified() && (isSuperAdmin() || isHR() || resource.data.uid == request.auth.uid || (isDeptLeadOrManager() && resource.data.departmentId == myDepartmentId()));
+      allow create: if isActiveMember() && isValidId(ticketId) && incoming().id == ticketId
+        && incoming().uid == request.auth.uid && incoming().employeeName is string
+        && incoming().title is string && incoming().title.size() >= 3 && incoming().title.size() <= 160
+        && incoming().description is string && incoming().description.size() >= 5 && incoming().description.size() <= 3000
+        && incoming().priority in ['low', 'normal', 'high', 'urgent'] && incoming().status == 'open'
+        && incoming().createdAt == request.time && incoming().updatedAt == request.time;
+      allow update: if isVerified() && incoming().id == existing().id && incoming().uid == existing().uid
+        && incoming().updatedAt == request.time
+        && incoming().status in ['open', 'in_progress', 'resolved', 'closed']
+        && (
+          isSuperAdmin() || isHR() ||
+          (existing().uid == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['comments', 'updatedAt']))
+        );
+      allow delete: if isSuperAdmin() || isHR();
+    }
+
+    match /polls/{pollId} {
+      allow get, list: if isActiveMember() && isValidId(pollId);
+      allow create: if (isSuperAdmin() || isHR()) && isValidId(pollId) && incoming().id == pollId
+        && incoming().title is string && incoming().title.size() >= 3 && incoming().title.size() <= 240
+        && incoming().options is list && incoming().options.size() >= 2 && incoming().options.size() <= 10
+        && incoming().active is bool && incoming().createdByUid == request.auth.uid
+        && incoming().createdAt == request.time && incoming().updatedAt == request.time;
+      allow update: if (isSuperAdmin() || isHR()) && incoming().id == existing().id && incoming().updatedAt == request.time;
+      allow delete: if isSuperAdmin() || isHR();
+    }
+
+    match /pollResponses/{responseId} {
+      allow get, list: if isVerified() && (isSuperAdmin() || isHR() || resource.data.uid == request.auth.uid || (isDeptLeadOrManager() && resource.data.departmentId == myDepartmentId()));
+      allow create: if isActiveMember() && isValidId(responseId)
+        && incoming().id == responseId && incoming().uid == request.auth.uid
+        && incoming().pollId is string && exists(/databases/$(database)/documents/polls/$(incoming().pollId))
+        && get(/databases/$(database)/documents/polls/$(incoming().pollId)).data.active == true
+        && incoming().option is string
+        && incoming().createdAt == request.time;
+      allow update, delete: if false;
+    }
+
+
+    match /monitoringConsents/{uid} {
+      allow get: if isVerified() && (request.auth.uid == uid || isSuperAdmin() || isHR() || (isDeptLeadOrManager() && resource.data.departmentId == myDepartmentId()));
+      allow list: if isVerified() && (request.auth.uid == uid || resource.data.uid == request.auth.uid || isSuperAdmin() || isHR() || (isDeptLeadOrManager() && resource.data.departmentId == myDepartmentId()));
+      allow create, update, delete: if false;
+    }
+
+    match /monitoringAgentStatus/{uid} {
+      allow get: if isVerified() && (request.auth.uid == uid || isSuperAdmin() || isHR() || (isDeptLeadOrManager() && resource.data.departmentId == myDepartmentId()));
+      allow list: if isVerified() && (request.auth.uid == uid || resource.data.uid == request.auth.uid || isSuperAdmin() || isHR() || (isDeptLeadOrManager() && resource.data.departmentId == myDepartmentId()));
+      allow create, update, delete: if false;
+    }
+
+    match /monitoringSnapshots/{snapshotId} {
+      allow get: if isVerified() && isValidId(snapshotId) && (
+        isSuperAdmin() || isHR() || resource.data.uid == request.auth.uid || (isDeptLeadOrManager() && resource.data.departmentId == myDepartmentId())
+      );
+      allow list: if isVerified() && (
+        isSuperAdmin() || isHR() || resource.data.uid == request.auth.uid || (isDeptLeadOrManager() && resource.data.departmentId == myDepartmentId())
+      );
+      allow create, update, delete: if false;
+    }
+
+    match /shiftTemplates/{templateId} {
+      allow get, list: if isActiveMember() && isValidId(templateId);
+      allow create: if (isSuperAdmin() || isHR()) && isValidId(templateId)
+        && incoming().id == templateId
+        && incoming().name is string && incoming().name.size() >= 2 && incoming().name.size() <= 100
+        && incoming().startTime is string && incoming().startTime.matches('^[0-9]{2}:[0-9]{2}$')
+        && incoming().endTime is string && incoming().endTime.matches('^[0-9]{2}:[0-9]{2}$')
+        && incoming().createdAt == request.time && incoming().updatedAt == request.time;
+      allow update: if (isSuperAdmin() || isHR()) && isValidId(templateId)
+        && incoming().id == existing().id && incoming().updatedAt == request.time;
+      allow delete: if isSuperAdmin() || isHR();
+    }
+
+    match /shiftAssignments/{assignmentId} {
+      allow get, list: if isVerified() && (
+        isSuperAdmin() || isHR() || (isDeptLeadOrManager() && resource.data.departmentId == myDepartmentId()) || resource.data.uid == request.auth.uid
+      );
+      allow create: if isVerified() && isValidId(assignmentId)
+        && (isSuperAdmin() || isHR() || (isDeptLeadOrManager() && incoming().departmentId == myDepartmentId()))
+        && incoming().id == assignmentId && isValidId(incoming().uid)
+        && incoming().shiftTemplateId is string && incoming().effectiveFrom is string
+        && incoming().createdAt == request.time && incoming().updatedAt == request.time;
+      allow update: if isVerified() && isValidId(assignmentId)
+        && (isSuperAdmin() || isHR() || (isDeptLeadOrManager() && existing().departmentId == myDepartmentId()))
+        && incoming().id == existing().id && incoming().updatedAt == request.time;
+      allow delete: if isSuperAdmin() || isHR();
+    }
+
+    match /reviewCycles/{cycleId} {
+      allow get, list: if isActiveMember() && isValidId(cycleId);
+      allow create: if (isSuperAdmin() || isHR()) && isValidId(cycleId)
+        && incoming().id == cycleId
+        && incoming().name is string && incoming().name.size() >= 2 && incoming().name.size() <= 120
+        && incoming().status in ['active', 'closed', 'upcoming']
+        && incoming().kpis is list && incoming().kpis.size() <= 20
+        && incoming().createdAt == request.time && incoming().updatedAt == request.time;
+      allow update: if (isSuperAdmin() || isHR()) && isValidId(cycleId)
+        && incoming().id == existing().id && incoming().updatedAt == request.time;
+      allow delete: if isSuperAdmin() || isHR();
+    }
+
+    match /leaveResetLogs/{logId} {
+      allow get, list: if isSuperAdmin() || isHR();
+      allow create: if (isSuperAdmin() || isHR()) && isValidId(logId)
+        && incoming().id == logId && incoming().executedByUid == request.auth.uid
+        && incoming().year is number && incoming().createdAt == request.time;
+      allow update, delete: if false;
+    }
+
+    match /auditLogs/{logId} {
+      allow get: if isValidId(logId) && (isSuperAdmin() || isHR());
+      allow list: if isSuperAdmin() || isHR();
+      allow create: if isVerified() && isValidId(logId)
+        && isValidAuditLog(incoming())
+        && incoming().id == logId
+        && incoming().actorUid == request.auth.uid
+        && incoming().createdAt == request.time;
+      allow update, delete: if false;
+    }
+
+    match /backupHistory/{backupId} {
+      allow get, list: if isSuperAdmin();
+      allow create: if isSuperAdmin() && isValidId(backupId)
+        && isValidBackupRecord(incoming())
+        && incoming().id == backupId
+        && incoming().createdByUid == request.auth.uid
+        && incoming().createdAt == request.time;
+      allow update: if false;
+      allow delete: if isSuperAdmin();
+    }
+
+    // Existing WorkFlow OS collections preserved non-destructively (read-scoped, never overwritten by ACE HRMS)
+    match /organisations/{orgId} {
+      allow get: if isVerified() && isValidId(orgId);
+      allow list: if isSuperAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /teamDirectory/{memberId} {
+      allow get: if isActiveMember() && isValidId(memberId);
+      allow list: if isActiveMember() && (isSuperAdmin() || isHR() || resource.data.uid == request.auth.uid || resource.data.email == request.auth.token.email);
+      allow create, update, delete: if false;
+    }
+
+    match /projects/{projectId} {
+      allow get, list: if isActiveMember();
+      allow create, update, delete: if false;
+    }
+
+    match /activityLogs/{logId} {
+      allow get, list: if isSuperAdmin() || isHR();
+      allow create, update, delete: if false;
+    }
+
+    match /seoClients/{docId} {
+      allow get, list: if isSuperAdmin() || isHR();
+      allow create, update, delete: if false;
+    }
+
+    match /seoKeywords/{docId} {
+      allow get, list: if isSuperAdmin() || isHR();
+      allow create, update, delete: if false;
+    }
+
+    match /seoRankingHistory/{docId} {
+      allow get, list: if isSuperAdmin() || isHR();
+      allow create, update, delete: if false;
+    }
+
+    match /seoTrafficSnapshots/{docId} {
+      allow get, list: if isSuperAdmin() || isHR();
+      allow create, update, delete: if false;
+    }
+  }
+}

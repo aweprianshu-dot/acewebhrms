@@ -1,0 +1,58 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isSignedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // Personal employee documents, leave attachments, and expense receipts (owner upload under own uid folder)
+    match /documents/{uid}/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isOwner(uid) && request.resource.size < 15 * 1024 * 1024;
+    }
+
+    match /leave_attachments/{uid}/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isOwner(uid) && request.resource.size < 15 * 1024 * 1024;
+    }
+
+    match /expenseReceipts/{uid}/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isOwner(uid) && request.resource.size < 15 * 1024 * 1024;
+    }
+
+    // Employee profile avatars, candidate resumes, and offer letters
+    match /avatars/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && request.resource.size < 5 * 1024 * 1024;
+    }
+
+    match /resumes/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && request.resource.size < 15 * 1024 * 1024;
+    }
+
+    match /offer_letters/{employeeId}/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && request.resource.size < 15 * 1024 * 1024;
+    }
+
+    match /offerLetters/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && request.resource.size < 15 * 1024 * 1024;
+    }
+
+    // Monitoring screenshots and workspace backup archives are server/Admin SDK controlled only
+    match /monitoring/{uid}/{allPaths=**} {
+      allow read, write: if false;
+    }
+
+    match /backups/{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

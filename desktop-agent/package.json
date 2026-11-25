@@ -1,0 +1,41 @@
+{
+  "name": "ace-hrms-desktop-agent",
+  "version": "1.0.0",
+  "private": true,
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win nsis",
+    "dist:mac": "electron-builder --mac dmg",
+    "dist:linux": "electron-builder --linux AppImage"
+  },
+  "dependencies": {
+    "active-win": "^8.0.0",
+    "screenshot-desktop": "^1.15.0"
+  },
+  "devDependencies": {
+    "electron": "^39.0.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.acewebexperts.hrmsagent",
+    "productName": "ACE HRMS Monitoring Agent",
+    "files": [
+      "main.cjs",
+      "agent-core.cjs",
+      "preload.cjs",
+      "index.html",
+      "agent-config.json"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "mac": {
+      "target": "dmg"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
+  }
+}

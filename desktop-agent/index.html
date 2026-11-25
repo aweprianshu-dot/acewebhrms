@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ACE HRMS Monitoring Agent</title>
+<style>
+:root{color-scheme:dark;font-family:Inter,Segoe UI,Arial,sans-serif;background:#0b0d12;color:#f8fafc}
+*{box-sizing:border-box}body{margin:0;padding:22px;background:#0b0d12}.shell{max-width:560px;margin:auto;background:#151922;border:1px solid #343a46;border-radius:18px;padding:22px}
+h1{font-size:21px;margin:0 0 6px}.muted{color:#a1a1aa;font-size:13px;line-height:1.5}.field{display:grid;gap:6px;margin:14px 0}label{font-size:12px;color:#d4d4d8}input{width:100%;border:1px solid #343a46;border-radius:10px;padding:11px;background:#0b0d12;color:white}button{border:0;border-radius:10px;padding:11px 15px;background:#ff4634;color:white;font-weight:700;cursor:pointer}button.secondary{background:#272d38}button:disabled{opacity:.5;cursor:not-allowed}.row{display:flex;gap:9px;flex-wrap:wrap;margin-top:14px}.status{padding:12px;border-radius:12px;background:#202633;border:1px solid #343a46;margin:16px 0;font-size:13px}.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#71717a;margin-right:8px}.on .dot{background:#22c55e;box-shadow:0 0 0 4px #22c55222}.consent{display:flex;gap:10px;align-items:flex-start;margin:16px 0;font-size:12px;color:#d4d4d8;line-height:1.5}.consent input{width:auto;margin-top:2px}.warn{color:#fdba74}.hidden{display:none}
+</style>
+</head>
+<body><main class="shell">
+<h1>ACE HRMS Monitoring Agent</h1>
+<p class="muted">Screen monitoring runs only during recorded working hours and pauses during recorded breaks. This agent displays its current state while running.</p>
+<div id="status" class="status"><span class="dot"></span><span id="statusText">Agent is not connected.</span></div>
+<section id="loginSection">
+<div class="field"><label for="apiBase">ACE HRMS server URL</label><input id="apiBase" value="http://localhost:3000" placeholder="https://hrms.yourdomain.com"></div>
+<div class="field"><label for="email">Work email</label><input id="email" type="email" autocomplete="username"></div>
+<div class="field"><label for="password">Password</label><input id="password" type="password" autocomplete="current-password"></div>
+<label class="consent"><input id="consent" type="checkbox"><span>I have read and consent to the ACE Web Experts employee monitoring policy. I understand that screenshots may be captured at random 5–10 minute intervals, the active application/window title and idle time may be recorded, monitoring is limited to paid working hours and pauses during logged breaks. I understand the retention period is configured by the company.</span></label>
+<div class="row"><button id="loginBtn">Sign in & Give Consent</button></div>
+</section>
+<section id="controls" class="hidden">
+<p class="muted" id="detail">Waiting for attendance state…</p>
+<div class="row"><button id="startBtn">Start Agent</button><button class="secondary" id="stopBtn">Stop Agent</button><button class="secondary" id="withdrawBtn">Withdraw Consent & Sign Out</button></div>
+<div id="withdrawConfirmBox" class="status hidden"><div style="margin-bottom:10px">Withdraw monitoring consent and sign out of this agent? Screen captures will stop immediately.</div><div class="row"><button id="confirmWithdrawBtn">Confirm Withdraw</button><button class="secondary" id="cancelWithdrawBtn">Cancel</button></div></div>
+</section>
+<p class="muted warn" id="message" role="status"></p>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+function showStatus(s){$('statusText').textContent=s.message||s.state||'Ready';$('status').classList.toggle('on',s.state==='monitoring');$('detail').textContent=s.detail||'';}
+$('loginBtn').addEventListener('click',async()=>{
+ $('message').textContent='';
+ if(!$('consent').checked){$('message').textContent='Please read and accept the monitoring policy first.';return;}
+ try{
+  await window.aceAgent.setApiBase($('apiBase').value.trim());
+  const result=await window.aceAgent.login({email:$('email').value.trim(),password:$('password').value});
+  if(!result.success)throw new Error(result.error||'Sign-in failed');
+  const consent=await window.aceAgent.acceptConsent(true);
+  if(!consent.success)throw new Error(consent.error||'Consent could not be saved');
+  $('loginSection').classList.add('hidden');$('controls').classList.remove('hidden');showStatus({state:'ready',message:'Consent saved. Agent is ready.'});
+ }catch(e){$('message').textContent=e.message||'Unable to connect.';}
+});
+$('startBtn').addEventListener('click',async()=>{const r=await window.aceAgent.start();if(!r.success)$('message').textContent=r.error||'Unable to start.';});
+$('stopBtn').addEventListener('click',async()=>{await window.aceAgent.stop();});
+$('withdrawBtn').addEventListener('click',()=>{$('withdrawConfirmBox').classList.remove('hidden');});
+$('cancelWithdrawBtn').addEventListener('click',()=>{$('withdrawConfirmBox').classList.add('hidden');});
+$('confirmWithdrawBtn').addEventListener('click',async()=>{const r=await window.aceAgent.withdraw();$('withdrawConfirmBox').classList.add('hidden');if(!r.success){$('message').textContent=r.error||'Unable to withdraw consent.';return;}$('controls').classList.add('hidden');$('loginSection').classList.remove('hidden');showStatus({state:'paused',message:'Consent withdrawn. Monitoring is OFF.'});});
+window.aceAgent.onStatus(showStatus);
+window.aceAgent.getStatus().then(s=>{showStatus(s);if(s.authenticated&&s.consentAccepted){$('loginSection').classList.add('hidden');$('controls').classList.remove('hidden');}});
+</script>
+</body></html>

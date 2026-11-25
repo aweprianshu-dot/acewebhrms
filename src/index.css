@@ -1,0 +1,290 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  :root {
+    --font-display: 'Plus Jakarta Sans', system-ui, sans-serif;
+    --font-sans: 'DM Sans', system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+    --ace-primary: #FF4634;
+    --ace-secondary: #FF6A33;
+    --ace-bg-main: #0B0D12;
+    --ace-bg-card: #151922;
+    --ace-bg-secondary: #1B1F28;
+    --ace-border: #292D36;
+    --ace-text-primary: #FFFFFF;
+    --ace-text-secondary: #C4C4CC;
+  }
+
+  html {
+    font-family: var(--font-sans);
+    color-scheme: dark;
+    background-color: var(--ace-bg-main);
+    color: var(--ace-text-primary);
+  }
+
+  html.ace-light {
+    color-scheme: light;
+    --ace-bg-main: #F4F6FA;
+    --ace-bg-card: #FFFFFF;
+    --ace-bg-secondary: #EEF2F7;
+    --ace-border: #D5DCE6;
+    --ace-text-primary: #18181B;
+    --ace-text-secondary: #52525B;
+    background-color: var(--ace-bg-main);
+    color: var(--ace-text-primary);
+  }
+
+  body {
+    background-color: var(--ace-bg-main);
+    color: var(--ace-text-primary);
+    transition: background-color 150ms ease, color 150ms ease;
+  }
+
+  h1, h2, h3, h4, .font-display {
+    font-family: var(--font-display);
+  }
+
+  .font-mono, .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.ace-btn-primary {
+  background: linear-gradient(135deg, #FF4634 0%, #FF6A33 100%);
+  color: #FFFFFF !important;
+  box-shadow: 0 6px 20px -6px rgba(255, 70, 52, 0.45);
+  transition: filter 160ms cubic-bezier(0.16, 1, 0.3, 1), transform 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ace-btn-primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.ace-btn-primary:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.ace-on-accent {
+  color: #FFFFFF !important;
+}
+
+.ace-logo-text {
+  color: #FFFFFF;
+}
+
+html.ace-light .ace-logo-text {
+  color: #18181B;
+}
+
+@keyframes ace-splash-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  50% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.ace-splash-bar {
+  animation: ace-splash-slide 1.25s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--ace-bg-main);
+}
+
+::-webkit-scrollbar-thumb {
+  background: #292D36;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3A3F4B;
+}
+
+html.ace-light ::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+}
+
+html.ace-light ::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
+
+/* Complete light theme workspace mapping with protected solid/accent button text */
+.ace-light body {
+  background-color: #F4F6FA;
+  color: #18181B;
+}
+
+.ace-light [class*="bg-[#0B0D12]"] {
+  background-color: #F4F6FA !important;
+}
+
+.ace-light [class*="bg-[#151922]"],
+.ace-light [class*="bg-[#151922]/"] {
+  background-color: #FFFFFF !important;
+}
+
+.ace-light [class*="bg-[#1B1F28]"],
+.ace-light [class*="bg-[#1B1F28]/"],
+.ace-light [class*="bg-[#202633]"] {
+  background-color: #EEF2F7 !important;
+}
+
+.ace-light [class*="bg-[#1B100F]"],
+.ace-light [class*="bg-[#251A19]"] {
+  background-color: #FFF7F5 !important;
+}
+
+.ace-light [class*="bg-black/50"],
+.ace-light [class*="bg-black/40"],
+.ace-light [class*="bg-black/30"],
+.ace-light [class*="bg-black/20"] {
+  background-color: #F8FAFC !important;
+}
+
+.ace-light [class*="border-[#292D36]"],
+.ace-light [class*="border-[#252B36]"],
+.ace-light [class*="border-[#343A46]"],
+.ace-light [class*="divide-[#292D36]"],
+.ace-light [class*="divide-[#252B36]"] {
+  border-color: #D5DCE6 !important;
+}
+
+.ace-light [class*="hover:bg-[#1B1F28]"]:hover,
+.ace-light [class*="hover:bg-[#151922]"]:hover {
+  background-color: #E2E8F0 !important;
+}
+
+.ace-light [class*="hover:text-white"]:hover,
+.ace-light [class*="hover:text-[#FFFFFF]"]:hover,
+.ace-light [class*="hover:text-[#F5F5F5]"]:hover {
+  color: #18181B !important;
+}
+
+/* Map light foreground text to dark ink ONLY on non-accent / non-solid-button elements */
+.ace-light [class*="text-[#FFFFFF]"]:not(.ace-btn-primary):not(.ace-on-accent):not([class*="from-[#FF4634]"]):not([class*="bg-[#FF4634]"]):not([class*="bg-emerald-6"]):not([class*="bg-emerald-7"]):not([class*="bg-red-6"]):not([class*="bg-red-7"]):not([class*="bg-rose-6"]):not([class*="bg-amber-6"]):not([class*="bg-indigo-6"]):not([class*="bg-blue-6"]),
+.ace-light [class*="text-white"]:not(.ace-btn-primary):not(.ace-on-accent):not([class*="from-[#FF4634]"]):not([class*="bg-[#FF4634]"]):not([class*="bg-emerald-6"]):not([class*="bg-emerald-7"]):not([class*="bg-red-6"]):not([class*="bg-red-7"]):not([class*="bg-rose-6"]):not([class*="bg-amber-6"]):not([class*="bg-indigo-6"]):not([class*="bg-blue-6"]),
+.ace-light [class*="text-[#F5F5F5]"]:not(.ace-btn-primary):not(.ace-on-accent),
+.ace-light [class*="text-[#D4D4D8]"],
+.ace-light [class*="text-[#D1D5DB]"] {
+  color: #18181B !important;
+}
+
+/* Preserve white text inside gradient/solid action buttons, active sidebar items, and white-text badges */
+.ace-light .ace-btn-primary,
+.ace-light .ace-btn-primary *,
+.ace-light [class*="from-[#FF4634]"],
+.ace-light [class*="from-[#FF4634]"] *,
+.ace-light [class*="bg-[#FF4634]"]:not([class*="bg-[#FF4634]/"]),
+.ace-light [class*="bg-[#FF4634]"]:not([class*="bg-[#FF4634]/"]) *,
+.ace-light [class*="bg-emerald-600"],
+.ace-light [class*="bg-emerald-700"],
+.ace-light [class*="bg-red-600"],
+.ace-light [class*="bg-red-700"],
+.ace-light [class*="bg-rose-600"],
+.ace-light [class*="bg-amber-600"],
+.ace-light [class*="bg-indigo-600"],
+.ace-light [class*="bg-blue-600"],
+.ace-light .ace-on-accent,
+.ace-light .ace-on-accent * {
+  color: #FFFFFF !important;
+}
+
+.ace-light [class*="text-[#A1A1AA]"],
+.ace-light [class*="text-[#A1A9B8]"],
+.ace-light [class*="text-[#B7BBC5]"] {
+  color: #52525B !important;
+}
+
+/* Light-mode legible semantic status colors (replace washed-out pastel *-200/*-300 text with *-700) */
+.ace-light [class*="text-emerald-200"],
+.ace-light [class*="text-emerald-300"],
+.ace-light [class*="text-emerald-400"] {
+  color: #047857 !important;
+}
+
+.ace-light [class*="text-amber-200"],
+.ace-light [class*="text-amber-300"],
+.ace-light [class*="text-amber-400"] {
+  color: #B45309 !important;
+}
+
+.ace-light [class*="text-rose-200"],
+.ace-light [class*="text-rose-300"],
+.ace-light [class*="text-rose-400"],
+.ace-light [class*="text-red-300"],
+.ace-light [class*="text-red-400"] {
+  color: #BE123C !important;
+}
+
+.ace-light [class*="text-sky-300"],
+.ace-light [class*="text-sky-400"],
+.ace-light [class*="text-blue-300"],
+.ace-light [class*="text-blue-400"],
+.ace-light [class*="text-indigo-300"] {
+  color: #1D4ED8 !important;
+}
+
+.ace-light input,
+.ace-light textarea,
+.ace-light select {
+  background-color: #FFFFFF !important;
+  color: #18181B !important;
+  border-color: #CBD5E1 !important;
+  color-scheme: light;
+}
+
+.ace-light input[type="checkbox"],
+.ace-light input[type="radio"] {
+  accent-color: #FF4634;
+}
+
+.ace-light input::placeholder,
+.ace-light textarea::placeholder {
+  color: #64748B !important;
+}
+
+.ace-light table thead {
+  background-color: #F1F5F9 !important;
+}
+
+.ace-light .recharts-default-tooltip {
+  background-color: #FFFFFF !important;
+  border-color: #CBD5E1 !important;
+  color: #18181B !important;
+  box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.12) !important;
+}
+
+.ace-light .recharts-cartesian-axis-tick-value {
+  fill: #475569 !important;
+}
+
+@media (max-width: 640px) {
+  .ace-mobile-safe {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+}
+
+/* Bring secondary labels up to a readable contrast/size on the dark theme too. */
+html:not(.ace-light) [class*="text-[#A1A1AA]"] {
+  color: #C4C4CC !important;
+}
+html:not(.ace-light) [class*="text-[11px]"] {
+  font-size: 12px !important;
+}
+html:not(.ace-light) [class*="text-[10px]"] {
+  font-size: 11px !important;
+}

@@ -1,0 +1,6 @@
+{
+  "name": "ACE HRMS",
+  "description": "Complete Human Resource Management Software for ACE Web Experts covering employee lifecycle, attendance, leave, payroll, recruitment, onboarding, offboarding, performance, and analytics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
