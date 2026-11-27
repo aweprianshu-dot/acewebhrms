@@ -748,8 +748,10 @@ service cloud.firestore {
         || (isActiveMember() && (resource.data.uid == request.auth.uid || resource.data.departmentId == myDepartmentId()))
       );
       allow list: if isVerified() && (
-        isSuperAdmin() || isHR() || (isDeptLeadOrManager() && resource.data.departmentId == myDepartmentId())
-        || (isActiveMember() && resource.data.departmentId == myDepartmentId())
+        isSuperAdmin() || isHR() ||
+        (isDeptLeadOrManager() && resource.data.departmentId == myDepartmentId()) ||
+        (isActiveMember() && resource.data.departmentId == myDepartmentId()) ||
+        (isActiveMember() && resource.data.uid == request.auth.uid)
       );
       allow create: if (isHR() || isSuperAdmin()) && isValidId(employeeId)
         && isValidDirectoryEntry(incoming())
