@@ -5,6 +5,8 @@ export interface MonitoringAgentStatusLike {
   online?: boolean;
   lastHeartbeat?: string;
   lastHeartbeatAt?: string;
+  lastScreenshotAt?: string;
+  lastScreenshotId?: string;
   state?: string;
   agentVersion?: string;
   date?: string;
