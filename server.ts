@@ -2111,13 +2111,33 @@ async function startServer() {
   // Daily birthday and work-anniversary cards. The employee's configured timezone determines the local date.
   const announcementTimer = setInterval(async () => {
     try {
-      const employeesSnap = await adminDb.collection('employees').where('status', '==', 'active').get();
+      const [employeesSnap, activeRolesSnap] = await Promise.all([
+        adminDb.collection('employees').where('status', '==', 'active').get(),
+        adminDb.collection('roles').where('status', '==', 'active').get(),
+      ]);
       for (const employeeDoc of employeesSnap.docs) {
         const employee = employeeDoc.data();
         const timezone = employee.timezone || 'Asia/Kolkata';
         const localDate = dateInTimezone(new Date(), timezone);
         const monthDay = localDate.slice(5);
         const birthDay = typeof employee.birthDate === 'string' ? employee.birthDate.slice(5, 10) : '';
+        const tomorrowDate = new Date(localDate + 'T12:00:00Z');
+        tomorrowDate.setUTCDate(tomorrowDate.getUTCDate() + 1);
+        const tomorrowMonthDay = tomorrowDate.toISOString().slice(5, 10);
+        if (birthDay && birthDay === tomorrowMonthDay && employee.birthdayOptOut !== true) {
+          const birthdayName = String(employee.fullName || 'our colleague');
+          for (const roleDoc of activeRolesSnap.docs) {
+            const recipientUid = roleDoc.id;
+            await createSystemNotificationIfMissing({
+              id: ('birthday_tomorrow_' + (employee.id || employeeDoc.id) + '_' + localDate + '_' + recipientUid).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 128),
+              recipientUid,
+              recipientEmail: String(roleDoc.data().email || ''),
+              title: 'Birthday tomorrow 🎂',
+              message: 'Tomorrow is ' + birthdayName + "'s birthday. Join the ACE Web Experts team in wishing them well!",
+              type: 'announcement', linkTab: 'announcements', emailEnabled: true,
+            });
+          }
+        }
         const joiningDay = typeof employee.joiningDate === 'string' ? employee.joiningDate.slice(5, 10) : '';
         const years = employee.joiningDate ? Number(localDate.slice(0,4)) - Number(String(employee.joiningDate).slice(0,4)) : 0;
         let category: 'birthday' | 'anniversary' | null = null;
