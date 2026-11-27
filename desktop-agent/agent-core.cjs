@@ -1,13 +1,13 @@
 const { randomInt } = require('node:crypto');
 
 const MIN_CAPTURE_DELAY_MS = 5 * 60 * 1000;
-const MAX_CAPTURE_DELAY_MS = 10 * 60 * 1000;
+const MAX_CAPTURE_DELAY_MS = 20 * 60 * 1000;
 
 function parseIntervalMinutes(intervalPreset) {
   const raw = String(intervalPreset || '').trim();
   const match = raw.match(/^(\d{1,2})-(\d{1,2})$/);
   if (!match) {
-    return { minMinutes: 5, maxMinutes: 10 };
+    return { minMinutes: 5, maxMinutes: 20 };
   }
   const minMinutes = Math.max(1, Math.min(60, Number(match[1])));
   const maxMinutes = Math.max(minMinutes, Math.min(120, Number(match[2])));
@@ -269,7 +269,16 @@ function createAgentController(deps) {
             ? `Meeting is logged; monitoring remains active (${modeLabel}, ${minMinutes}–${maxMinutes}m).`
             : `Working hours active (${modeLabel}, ${minMinutes}–${maxMinutes}m). Breaks pause monitoring.`
         );
-        if (!captureTimer) scheduleCapture();
+        if (!captureTimer) {
+          // Take the first permitted screenshot immediately after check-in/agent start.
+          // Subsequent captures use a fresh random 5–20 minute delay.
+          scheduleCapture();
+          try {
+            await captureAndUpload();
+          } catch (captureError) {
+            publish(captureError.message || 'Initial screenshot upload failed.', 'warning');
+          }
+        }
       } else {
         clearTimeoutFn(captureTimer);
         captureTimer = null;
