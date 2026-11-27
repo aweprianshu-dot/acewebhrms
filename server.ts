@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
-import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue, Timestamp, type QueryDocumentSnapshot } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import nodemailer from 'nodemailer';
 import rateLimit from 'express-rate-limit';
@@ -1181,7 +1181,7 @@ async function startServer() {
         emailLower === email ? Promise.resolve(null) : rolesRef.where('email', '==', emailLower).get(),
       ]);
 
-      const candidates = new Map<string, FirebaseFirestore.QueryDocumentSnapshot>();
+      const candidates = new Map<string, QueryDocumentSnapshot>();
       for (const snap of [exactSnap, lowerSnap]) {
         snap?.docs.forEach((candidate) => candidates.set(candidate.id, candidate));
       }
