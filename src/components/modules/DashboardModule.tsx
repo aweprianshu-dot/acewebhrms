@@ -883,30 +883,6 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ onNavigate }) 
 
   return (
     <div className="space-y-6">
-      {/* Error Recovery Banner */}
-      {dataError && !/permission-denied|missing or insufficient permissions|insufficient permissions/i.test(dataError) && (
-        <div
-          role="alert"
-          className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-200"
-        >
-          <div className="flex items-start gap-3 text-xs">
-            <AlertTriangle className="w-4 h-4 text-[#FF4634] shrink-0 mt-0.5" />
-            <div>
-              <div className="font-semibold text-[#FFFFFF]">Real-time sync warning</div>
-              <p className="text-[#A1A1AA] mt-0.5">{dataError}</p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={retrySync}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#151922] border border-[#292D36] hover:border-[#FF4634]/50 text-xs font-medium text-[#FFFFFF] shrink-0 self-start sm:self-center"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-            Retry Sync
-          </button>
-        </div>
-      )}
-
       {/* 1. Workforce Overview Header + Filters + Actions */}
       <section className="bg-[#151922] border border-[#292D36] rounded-2xl p-5 sm:p-6 shadow-lg shadow-black/20">
         <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
