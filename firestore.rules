@@ -102,7 +102,7 @@ service cloud.firestore {
 
     function isValidRoleAssignment(data) {
       return data.keys().hasAll(['uid', 'email', 'role', 'status', 'createdAt', 'updatedAt'])
-        && data.keys().hasOnly(['uid', 'email', 'role', 'departmentId', 'teamId', 'teamLeadUid', 'inviteId', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'email', 'role', 'departmentId', 'teamId', 'teamLeadUid', 'inviteId', 'legacyRoleDocId', 'status', 'createdAt', 'updatedAt'])
         && isValidId(data.uid)
         && data.email is string && data.email.size() >= 3 && data.email.size() <= 254
         && data.role in ['super_admin', 'hr_manager', 'dept_manager', 'team_lead', 'employee']
