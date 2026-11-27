@@ -1,0 +1,39 @@
+name: Build ACE HRMS Windows Monitoring Agent
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/hrms-night-shift-payroll-birthday-monitoring
+    paths:
+      - "desktop-agent/**"
+      - ".github/workflows/build-desktop-agent.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows-agent:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install desktop agent dependencies
+        working-directory: desktop-agent
+        run: npm install
+      - name: Build Windows installer and publish updater release
+        working-directory: desktop-agent
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run dist:win -- --publish always
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ACE-HRMS-Monitoring-Agent-Windows
+          path: desktop-agent/dist/*.exe
+          if-no-files-found: error
+          retention-days: 14

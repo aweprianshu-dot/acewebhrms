@@ -32,6 +32,9 @@ export const AnnouncementsModule: React.FC = () => {
   const [showModal, setShowModal] = useState(false);
 
   const [reads, setReads] = useState<AnnouncementReadDoc[]>([]);
+  const [readsLoaded, setReadsLoaded] = useState(false);
+  const [birthdayPopup, setBirthdayPopup] = useState<Announcement | null>(null);
+  const [dismissedBirthdayIds, setDismissedBirthdayIds] = useState<string[]>([]);
   const [expandedReadAnnId, setExpandedReadAnnId] = useState<string | null>(null);
   const [acknowledgingId, setAcknowledgingId] = useState<string | null>(null);
   const [publishError, setPublishError] = useState('');
@@ -51,10 +54,21 @@ export const AnnouncementsModule: React.FC = () => {
     const q = isHR ? collection(db, 'announcementReads') : query(collection(db, 'announcementReads'), where('uid', '==', uid));
     return onSnapshot(
       q,
-      (snap) => setReads(snap.docs.map((d) => ({ id: d.id, ...d.data() } as AnnouncementReadDoc))),
+      (snap) => { setReads(snap.docs.map((d) => ({ id: d.id, ...d.data() } as AnnouncementReadDoc))); setReadsLoaded(true); },
       () => {}
     );
   }, [uid, isHR]);
+
+  useEffect(() => {
+    if (!uid || !readsLoaded || birthdayPopup) return;
+    const nextBirthday = announcements.find((item) =>
+      item.category === 'birthday' &&
+      item.id.startsWith('auto_birthday_') &&
+      !reads.some((read) => read.uid === uid && read.announcementId === item.id) &&
+      !dismissedBirthdayIds.includes(item.id)
+    );
+    if (nextBirthday) setBirthdayPopup(nextBirthday);
+  }, [uid, readsLoaded, reads, announcements, birthdayPopup, dismissedBirthdayIds]);
 
   const activeMembers = useMemo(
     () => directory.filter((d) => d.uid && d.status === 'active'),
@@ -486,6 +500,24 @@ export const AnnouncementsModule: React.FC = () => {
               </article>
             );
           })}
+        </div>
+      )}
+
+      {birthdayPopup && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="birthday-popup-title">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-md" />
+          <section className="relative z-10 w-full max-w-md overflow-hidden rounded-3xl border border-[#FF9A65]/40 bg-[#151922] p-7 text-center shadow-2xl">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-[#FF4634] to-[#FF9A65] text-3xl" aria-hidden="true">🎂</div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-[#FF9A65]">ACE Web Experts celebrates you</p>
+            <h2 id="birthday-popup-title" className="mt-3 font-display text-2xl font-bold text-white">{birthdayPopup.title}</h2>
+            <p className="mt-3 text-sm leading-6 text-[#D4D4D8]">{birthdayPopup.content}</p>
+            <button type="button" onClick={() => {
+              const item = birthdayPopup;
+              setDismissedBirthdayIds((current) => [...current, item.id]);
+              setBirthdayPopup(null);
+              void acknowledgeAnnouncement(item);
+            }} className="ace-btn-primary mt-6 w-full rounded-xl px-4 py-3 text-sm font-semibold">Thank you!</button>
+          </section>
         </div>
       )}
 

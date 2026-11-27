@@ -1,4 +1,5 @@
-const { app, BrowserWindow, ipcMain, powerMonitor, safeStorage } = require('electron');
+const { app, BrowserWindow, ipcMain, powerMonitor, safeStorage, nativeImage } = require('electron');
+const { autoUpdater } = require('electron-updater');
 const fs = require('node:fs');
 const path = require('node:path');
 const { createAgentController } = require('./agent-core.cjs');
@@ -24,7 +25,19 @@ const agent = createAgentController({
   fetchImpl: (...args) => fetch(...args),
   captureScreenshot: async () => {
     const screenshotDesktop = (await import('screenshot-desktop')).default;
-    return screenshotDesktop({ format: 'png' });
+    const raw = await screenshotDesktop({ format: 'jpg' });
+    // Keep the Firestore fallback below its 1 MiB document limit.
+    const image = nativeImage.createFromBuffer(raw);
+    const resized = image.resize({ width: 1600, height: 900, quality: 'good' });
+    let compressed = resized.toJPEG(55);
+    if (compressed.length > 650 * 1024) compressed = resized.toJPEG(40);
+    if (compressed.length > 650 * 1024) {
+      compressed = image.resize({ width: 1280, height: 720, quality: 'good' }).toJPEG(32);
+    }
+    if (compressed.length > 650 * 1024) {
+      throw new Error('Screenshot is too large after compression; capture was skipped safely.');
+    }
+    return compressed;
   },
   getActiveWindow: async () => {
     const activeWinModule = await import('active-win');
@@ -58,6 +71,15 @@ function createWindow() {
 app.whenReady().then(() => {
   agent.loadAuth();
   createWindow();
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.on('checking-for-update', () => mainWindow?.webContents.send('agent:update-status', { state: 'checking' }));
+  autoUpdater.on('update-available', (info) => mainWindow?.webContents.send('agent:update-status', { state: 'available', version: info.version }));
+  autoUpdater.on('update-not-available', () => mainWindow?.webContents.send('agent:update-status', { state: 'current' }));
+  autoUpdater.on('download-progress', (progress) => mainWindow?.webContents.send('agent:update-status', { state: 'downloading', percent: Math.round(progress.percent) }));
+  autoUpdater.on('update-downloaded', (info) => mainWindow?.webContents.send('agent:update-status', { state: 'downloaded', version: info.version }));
+  autoUpdater.on('error', (error) => mainWindow?.webContents.send('agent:update-status', { state: 'error', message: error.message }));
+  if (app.isPackaged) setTimeout(() => autoUpdater.checkForUpdates().catch(() => {}), 8000);
 });
 app.on('window-all-closed', () => {
   agent.stop();
@@ -82,3 +104,5 @@ ipcMain.handle('agent:stop', async () => {
 });
 ipcMain.handle('agent:withdraw', async () => agent.withdraw());
 ipcMain.handle('agent:status', async () => agent.getStatus());
+
+ipcMain.handle('agent:install-update', async () => { autoUpdater.quitAndInstall(); return { success: true }; });

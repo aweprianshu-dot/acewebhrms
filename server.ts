@@ -544,6 +544,15 @@ const payrollInputSchema = z.object({
 function dateInTimezone(date: Date, timezone: string): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
 }
+function previousDate(dateStr: string): string {
+  const date = new Date(dateStr + 'T12:00:00Z');
+  date.setUTCDate(date.getUTCDate() - 1);
+  return date.toISOString().slice(0, 10);
+}
+function attendanceDateCandidates(now: Date, timezone: string): string[] {
+  const today = dateInTimezone(now, timezone);
+  return [today, previousDate(today)];
+}
 function timeInTimezone(date: Date, timezone: string): string {
   return new Intl.DateTimeFormat('en-GB', { timeZone: timezone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(date);
 }
@@ -676,10 +685,13 @@ async function startServer() {
       const now = new Date();
       const date = dateInTimezone(now, employee.timezone);
       const recordId = `${uid}_${date}`;
+      const localHour = Number(timeInTimezone(now, employee.timezone).slice(0, 2));
+      const isNightShift = localHour >= 18 || localHour < 6;
+      const expectedShiftEndAt = new Date(now.getTime() + 8 * 60 * 60 * 1000).toISOString();
       const startMinutes = minutesOfDay(employee.policy.workStartTime, 570);
       const graceMinutes = Number(employee.policy.graceMinutes ?? 15);
       const currentMinutes = Number(timeInTimezone(now, employee.timezone).slice(0,2)) * 60 + Number(timeInTimezone(now, employee.timezone).slice(3,5));
-      const lateMinutes = Math.max(0, currentMinutes - startMinutes - graceMinutes);
+      const lateMinutes = isNightShift ? 0 : Math.max(0, currentMinutes - startMinutes - graceMinutes);
       const historySnap = lateMinutes > 0 ? await adminDb.collection('attendance').where('uid','==',uid).get() : null;
       const priorLateMarks = historySnap?.docs.filter((d) => {
         const record = d.data();
@@ -693,20 +705,28 @@ async function startServer() {
       const latePenaltyDays = latePenaltyReached ? 0.5 : 0;
       const attendanceNotes = latePenaltyReached ? `Late mark threshold (${lateMarksThreshold}) reached; ${lateMarksAction === 'lop' ? '0.5 LOP day' : 'half-day'} applied.` : '';
       const recordRef = adminDb.collection('attendance').doc(recordId);
+      const previousRecordRef = adminDb.collection('attendance').doc(uid + '_' + previousDate(date));
       await adminDb.runTransaction(async (tx) => {
-        const [existing, activeBreaks] = await Promise.all([
-          tx.get(recordRef),
+        const [existing, previous, activeBreaks] = await Promise.all([
+          tx.get(recordRef), tx.get(previousRecordRef),
           tx.get(adminDb.collection('breakSessions').where('uid', '==', uid)),
         ]);
-        if (existing.exists) throw new Error('You are already checked in for today.');
-        if (activeBreaks.docs.some((d) => d.data().date === date && d.data().status === 'active')) throw new Error('An active break exists. End it before checking in.');
+        const hasOpenShift = [existing, previous].some((snap) => {
+          if (!snap.exists) return false;
+          const row = snap.data()!;
+          const startedAt = new Date(String(row.checkInTime || '')).getTime();
+          return Boolean(row.checkInTime) && !row.checkOutTime && Number.isFinite(startedAt) && now.getTime() - startedAt <= 16 * 60 * 60 * 1000;
+        });
+        if (hasOpenShift) throw new Error('You already have an active shift. Check out before starting another.');
+        if (activeBreaks.docs.some((d) => [date, previousDate(date)].includes(String(d.data().date)) && d.data().status === 'active')) throw new Error('An active break exists. End it before checking in.');
         tx.create(recordRef, {
           id: recordId, uid, employeeId: employee.employeeId, employeeName: employee.employeeName,
           departmentId: employee.departmentId, date, checkInTime: now.toISOString(), checkOutTime: '',
           lunchStartTime: '', lunchEndTime: '', actualLunchMinutes: 0, breakMinutes: 0, workingMinutes: 0,
           lateMinutes, latePenaltyDays, earlyDepartureMinutes: 0, officeTimezone: employee.timezone,
           status: attendanceStatus, isLate: lateMinutes > 0, isEarlyDeparture: false,
-          notes: attendanceNotes, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+          notes: attendanceNotes, isNightShift, expectedShiftEndAt, scheduledShiftMinutes: 480,
+          createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
         });
       });
       res.setHeader('Cache-Control', 'no-store');
@@ -724,27 +744,37 @@ async function startServer() {
       const employee = await loadActiveEmployee(uid, req.user.email);
       const now = new Date();
       const date = dateInTimezone(now, employee.timezone);
-      const recordRef = adminDb.collection('attendance').doc(`${uid}_${date}`);
+      const shiftDates = attendanceDateCandidates(now, employee.timezone);
+      const recordRefs = shiftDates.map((d) => adminDb.collection('attendance').doc(uid + '_' + d));
       const startMinutes = minutesOfDay(employee.policy.workStartTime, 570);
       const endMinutes = minutesOfDay(employee.policy.workEndTime, 1110);
       const halfDayThresholdBase = Number(employee.policy.halfDayThresholdMinutes ?? 270);
       const result = await adminDb.runTransaction(async (tx) => {
-        const recordSnap = await tx.get(recordRef);
-        if (!recordSnap.exists) throw new Error('Check in before checking out.');
+        const recordSnaps = await Promise.all(recordRefs.map((ref) => tx.get(ref)));
+        const activeIndex = recordSnaps.findIndex((snap) => {
+          if (!snap.exists) return false;
+          const row = snap.data()!;
+          const startedAt = new Date(String(row.checkInTime || '')).getTime();
+          return Boolean(row.checkInTime) && !row.checkOutTime && Number.isFinite(startedAt) && now.getTime() - startedAt <= 16 * 60 * 60 * 1000;
+        });
+        if (activeIndex < 0) throw new Error('No active shift found. Check in before checking out.');
+        const recordSnap = recordSnaps[activeIndex]!;
+        const recordRef = recordRefs[activeIndex]!;
         const record = recordSnap.data()!;
+        const shiftDate = String(record.date || shiftDates[activeIndex]);
         if (record.uid !== uid) throw new Error('You can only check out your own attendance.');
         if (record.checkOutTime) throw new Error('You are already checked out.');
         const breaksQuery = adminDb.collection('breakSessions').where('uid', '==', uid);
         const approvedLeaveQuery = adminDb.collection('leaveRequests').where('uid', '==', uid);
         const reportsQuery = adminDb.collection('dailyWorkReports').where('uid', '==', uid);
         const [breakSnap, leaveSnap, reportSnap] = await Promise.all([tx.get(breaksQuery), tx.get(approvedLeaveQuery), tx.get(reportsQuery)]);
-        const breakRows = breakSnap.docs.map((d) => d.data()).filter((b) => b.date === date);
+        const breakRows = breakSnap.docs.map((d) => d.data()).filter((b) => [shiftDate, date].includes(String(b.date)));
         const hasApprovedHalfDay = leaveSnap.docs.some((leaveDoc) => {
           const leave = leaveDoc.data();
-          return leave.status === 'approved' && leave.startDate <= date && leave.endDate >= date && ['first_half', 'second_half'].includes(leave.dayPart);
+          return leave.status === 'approved' && leave.startDate <= shiftDate && leave.endDate >= shiftDate && ['first_half', 'second_half'].includes(leave.dayPart);
         });
         if (employee.policy.requireDailyWorkReportBeforeCheckout === true
-          && !reportSnap.docs.some((reportDoc) => reportDoc.data().date === date && ['submitted', 'approved'].includes(String(reportDoc.data().reviewStatus)))) {
+          && !reportSnap.docs.some((reportDoc) => [shiftDate, date].includes(String(reportDoc.data().date)) && ['submitted', 'approved'].includes(String(reportDoc.data().reviewStatus)))) {
           throw new Error('Submit your daily work report before checking out. Your company policy requires it.');
         }
         const halfDayThreshold = hasApprovedHalfDay ? Math.ceil(halfDayThresholdBase / 2) : halfDayThresholdBase;
@@ -760,8 +790,10 @@ async function startServer() {
         const workingMinutes = Math.max(0, elapsedMinutes - breakMinutes);
         const localTime = timeInTimezone(now, employee.timezone);
         const outMinutes = Number(localTime.slice(0,2)) * 60 + Number(localTime.slice(3,5));
-        const earlyDepartureMinutes = Math.max(0, endMinutes - outMinutes);
+        const expectedEndMs = record.isNightShift && record.expectedShiftEndAt ? new Date(String(record.expectedShiftEndAt)).getTime() : 0;
+        const earlyDepartureMinutes = expectedEndMs ? Math.max(0, Math.ceil((expectedEndMs - now.getTime()) / 60000)) : Math.max(0, endMinutes - outMinutes);
         const isEarlyDeparture = earlyDepartureMinutes > 0;
+        const overtimeMinutes = record.isNightShift ? Math.max(0, elapsedMinutes - 480) : 0;
         const status = resolveCheckoutStatus({
           currentStatus: String(record.status || 'present'),
           workingMinutes,
@@ -770,10 +802,10 @@ async function startServer() {
         });
         tx.update(recordRef, {
           checkOutTime: now.toISOString(), breakMinutes, workingMinutes, isEarlyDeparture,
-          earlyDepartureMinutes, officeTimezone: employee.timezone, status,
+          earlyDepartureMinutes, overtimeMinutes, officeTimezone: employee.timezone, status,
           updatedAt: FieldValue.serverTimestamp(),
         });
-        return { checkOutTime: now.toISOString(), breakMinutes, workingMinutes, earlyDepartureMinutes, status, timezone: employee.timezone };
+        return { checkOutTime: now.toISOString(), shiftDate, breakMinutes, workingMinutes, earlyDepartureMinutes, overtimeMinutes, status, timezone: employee.timezone };
       });
       res.setHeader('Cache-Control', 'no-store');
       res.json({ success: true, ...result });
@@ -877,15 +909,24 @@ async function startServer() {
       if (!req.user?.emailVerified) { res.status(403).json({ error: 'Verified email required.' }); return; }
       const uid = req.user.uid;
       const employee = await loadActiveEmployee(uid, req.user.email);
-      const date = dateInTimezone(new Date(), employee.timezone);
-      const [consentSnap, attendanceSnap, breakSnap, meetingSnap] = await Promise.all([
+      const now = new Date();
+      const date = dateInTimezone(now, employee.timezone);
+      const shiftDates = attendanceDateCandidates(now, employee.timezone);
+      const [consentSnap, attendanceSnaps, breakSnap, meetingSnap] = await Promise.all([
         adminDb.collection('monitoringConsents').doc(uid).get(),
-        adminDb.collection('attendance').doc(`${uid}_${date}`).get(),
+        Promise.all(shiftDates.map((d) => adminDb.collection('attendance').doc(uid + '_' + d).get())),
         adminDb.collection('breakSessions').where('uid','==',uid).get(),
         adminDb.collection('meetingLogs').where('uid','==',uid).get(),
       ]);
-      const attendance = attendanceSnap.data();
-      const breaks = breakSnap.docs.map((d) => d.data()).filter((b) => b.date === date);
+      const attendanceSnap = attendanceSnaps.find((snap) => {
+        if (!snap.exists) return false;
+        const row = snap.data()!;
+        const startedAt = new Date(String(row.checkInTime || '')).getTime();
+        return Boolean(row.checkInTime) && !row.checkOutTime && Number.isFinite(startedAt) && now.getTime() - startedAt <= 16 * 60 * 60 * 1000;
+      });
+      const attendance = attendanceSnap?.data();
+      const shiftDate = String(attendance?.date || date);
+      const breaks = breakSnap.docs.map((d) => d.data()).filter((b) => [shiftDate, date].includes(String(b.date)));
       const meetings = meetingSnap.docs.map((d) => d.data()).filter((m) => m.date === date);
       const consent = consentSnap.data();
       const hasConsent = consent?.accepted === true;
@@ -932,40 +973,80 @@ async function startServer() {
   app.post('/api/monitoring/snapshot', requireAuth, async (req: AuthenticatedRequest, res) => {
     try {
       if (!req.user?.emailVerified) { res.status(403).json({ error: 'Verified email required.' }); return; }
-      if (!adminBucket) { res.status(503).json({ error: 'Firebase Storage bucket is not configured for the monitoring agent.' }); return; }
       const uid = req.user.uid;
       const employee = await loadActiveEmployee(uid, req.user.email);
       const consentSnap = await adminDb.collection('monitoringConsents').doc(uid).get();
       if (consentSnap.data()?.accepted !== true) { res.status(403).json({ error: 'Monitoring consent required.' }); return; }
       const now = new Date();
       const date = dateInTimezone(now, employee.timezone);
-      const attendanceSnap = await adminDb.collection('attendance').doc(`${uid}_${date}`).get();
-      if (!attendanceSnap.exists || !attendanceSnap.data()?.checkInTime || attendanceSnap.data()?.checkOutTime) {
+      const shiftDates = attendanceDateCandidates(now, employee.timezone);
+      const attendanceSnaps = await Promise.all(shiftDates.map((d) => adminDb.collection('attendance').doc(uid + '_' + d).get()));
+      const attendanceSnap = attendanceSnaps.find((snap) => {
+        if (!snap.exists) return false;
+        const row = snap.data()!;
+        const startedAt = new Date(String(row.checkInTime || '')).getTime();
+        return Boolean(row.checkInTime) && !row.checkOutTime && Number.isFinite(startedAt) && now.getTime() - startedAt <= 16 * 60 * 60 * 1000;
+      });
+      if (!attendanceSnap || !attendanceSnap.exists || !attendanceSnap.data()?.checkInTime || attendanceSnap.data()?.checkOutTime) {
         res.status(409).json({ error: 'Monitoring is only allowed during checked-in working hours.' }); return;
       }
       const breakSnap = await adminDb.collection('breakSessions').where('uid','==',uid).get();
-      if (breakSnap.docs.some((d) => d.data().date === date && d.data().status === 'active')) {
+      const shiftDate = String(attendanceSnap.data()?.date || date);
+      if (breakSnap.docs.some((d) => [shiftDate, date].includes(String(d.data().date)) && d.data().status === 'active')) {
         res.status(409).json({ error: 'Monitoring pauses during recorded breaks.' }); return;
       }
       const encoded = String(req.body?.screenshotBase64 || '');
-      if (!encoded || encoded.length > 7_000_000 || !/^[A-Za-z0-9+/]+={0,2}$/.test(encoded)) {
-        res.status(400).json({ error: 'Invalid or oversized screenshot payload.' }); return;
+      const screenshotMimeType = String(req.body?.screenshotMimeType || 'image/png');
+      if (!encoded || encoded.length > 950_000 || !/^[A-Za-z0-9+/]+={0,2}$/.test(encoded)) {
+        res.status(400).json({ error: 'Invalid or oversized screenshot payload. The agent must send a compressed JPEG.' }); return;
+      }
+      if (!['image/jpeg'].includes(screenshotMimeType)) {
+        res.status(400).json({ error: 'Only compressed JPEG screenshots are accepted.' }); return;
       }
       const bytes = Buffer.from(encoded, 'base64');
-      if (bytes.length > 5 * 1024 * 1024) { res.status(413).json({ error: 'Screenshot exceeds the 5 MB limit.' }); return; }
+      // Firestore document limit is 1 MiB; leave headroom for metadata.
+      if (bytes.length > 650 * 1024) { res.status(413).json({ error: 'Compressed screenshot exceeds the 650 KB safe limit.' }); return; }
       const snapshotId = `shot_${uid}_${now.getTime()}`.replace(/[^a-zA-Z0-9_-]/g,'_').slice(0,128);
-      const storagePath = `monitoring/${uid}/${date}/${snapshotId}.png`;
-      const file = adminBucket.file(storagePath);
-      await file.save(bytes, { resumable: false, contentType: 'image/png', metadata: { metadata: { employeeUid: uid, snapshotId } } });
+      const extension = 'jpg';
+      const storagePath = `monitoring/${uid}/${shiftDate}/${snapshotId}.${extension}`;
+      let storedInBucket = false;
+      if (adminBucket) {
+        try {
+          await adminBucket.file(storagePath).save(bytes, {
+            resumable: false,
+            contentType: screenshotMimeType,
+            metadata: { metadata: { employeeUid: uid, snapshotId } },
+          });
+          storedInBucket = true;
+        } catch (storageError) {
+          console.error('[Monitoring] Firebase Storage upload failed; using Firestore image fallback:', storageError instanceof Error ? storageError.message : storageError);
+        }
+      }
+      if (!storedInBucket) {
+        // Fallback keeps screenshots working even when Firebase Storage is not enabled/billable.
+        await adminDb.collection('monitoringScreenshotBlobs').doc(snapshotId).set({
+          uid, snapshotId, mimeType: screenshotMimeType, imageBase64: encoded,
+          createdAt: FieldValue.serverTimestamp(),
+        });
+      }
       await adminDb.collection('monitoringSnapshots').doc(snapshotId).set({
         id: snapshotId, uid, employeeName: employee.employeeName, departmentId: employee.departmentId,
-        date, capturedAt: now.toISOString(), timestampMs: now.getTime(), storagePath,
+        date: shiftDate, capturedAt: now.toISOString(), timestampMs: now.getTime(),
+        storagePath: storedInBucket ? storagePath : null,
+        imageBackend: storedInBucket ? 'firebase-storage' : 'firestore-fallback',
         activeApp: String(req.body?.activeApp || 'Unknown').slice(0,160),
         windowTitle: String(req.body?.windowTitle || '').slice(0,300),
         idleSeconds: Math.max(0, Math.min(86400, Number(req.body?.idleSeconds || 0))),
         activityPercent: Math.max(0, Math.min(100, Number(req.body?.activityPercent || 0))),
         createdAt: FieldValue.serverTimestamp(),
       });
+      // Keep the live agent row useful even before an admin opens the screenshot gallery.
+      await adminDb.collection('monitoringAgentStatus').doc(uid).set({
+        uid, employeeName: employee.employeeName, departmentId: employee.departmentId,
+        date, lastScreenshotAt: now.toISOString(), lastScreenshotId: snapshotId,
+        lastHeartbeat: now.toISOString(), state: 'monitoring',
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
       res.json({ success: true, snapshotId, capturedAt: now.toISOString() });
     } catch (error) {
       const iamBlocked = isPermissionDeniedError(error);
@@ -986,8 +1067,16 @@ async function startServer() {
         || (['dept_manager', 'team_lead'].includes(String(role?.role)) && role?.departmentId === snapshot.departmentId)
         || snapshot.uid === req.user.uid;
       if (!role || role.status !== 'active' || !isManager) { res.status(403).json({ error: 'You are not allowed to view this employee screenshot.' }); return; }
-      if (!adminBucket) { res.status(503).json({ error: 'Firebase Storage bucket is not configured.' }); return; }
-      const [url] = await adminBucket.file(String(snapshot.storagePath)).getSignedUrl({ action: 'read', expires: Date.now() + 60 * 60 * 1000 });
+      let url: string;
+      if (snapshot.storagePath && adminBucket) {
+        const [signedUrl] = await adminBucket.file(String(snapshot.storagePath)).getSignedUrl({ action: 'read', expires: Date.now() + 60 * 60 * 1000 });
+        url = signedUrl;
+      } else {
+        const blobSnap = await adminDb.collection('monitoringScreenshotBlobs').doc(snapshotId).get();
+        const blob = blobSnap.data();
+        if (!blob?.imageBase64) { res.status(404).json({ error: 'Screenshot image data not found.' }); return; }
+        url = `data:${String(blob.mimeType || 'image/jpeg')};base64,${String(blob.imageBase64)}`;
+      }
       const auditId = `screenshot_view_${req.user.uid}_${Date.now()}`.slice(0,128);
       await adminDb.collection('auditLogs').doc(auditId).set({
         id: auditId, actorUid: req.user.uid, actorEmail: req.user.email || '', actorRole: String(role.role),
@@ -2062,13 +2151,33 @@ async function startServer() {
   // Daily birthday and work-anniversary cards. The employee's configured timezone determines the local date.
   const announcementTimer = setInterval(async () => {
     try {
-      const employeesSnap = await adminDb.collection('employees').where('status', '==', 'active').get();
+      const [employeesSnap, activeRolesSnap] = await Promise.all([
+        adminDb.collection('employees').where('status', '==', 'active').get(),
+        adminDb.collection('roles').where('status', '==', 'active').get(),
+      ]);
       for (const employeeDoc of employeesSnap.docs) {
         const employee = employeeDoc.data();
         const timezone = employee.timezone || 'Asia/Kolkata';
         const localDate = dateInTimezone(new Date(), timezone);
         const monthDay = localDate.slice(5);
         const birthDay = typeof employee.birthDate === 'string' ? employee.birthDate.slice(5, 10) : '';
+        const tomorrowDate = new Date(localDate + 'T12:00:00Z');
+        tomorrowDate.setUTCDate(tomorrowDate.getUTCDate() + 1);
+        const tomorrowMonthDay = tomorrowDate.toISOString().slice(5, 10);
+        if (birthDay && birthDay === tomorrowMonthDay && employee.birthdayOptOut !== true) {
+          const birthdayName = String(employee.fullName || 'our colleague');
+          for (const roleDoc of activeRolesSnap.docs) {
+            const recipientUid = roleDoc.id;
+            await createSystemNotificationIfMissing({
+              id: ('birthday_tomorrow_' + (employee.id || employeeDoc.id) + '_' + localDate + '_' + recipientUid).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 128),
+              recipientUid,
+              recipientEmail: String(roleDoc.data().email || ''),
+              title: 'Birthday tomorrow 🎂',
+              message: 'Tomorrow is ' + birthdayName + "'s birthday. Join the ACE Web Experts team in wishing them well!",
+              type: 'announcement', linkTab: 'announcements', emailEnabled: true,
+            });
+          }
+        }
         const joiningDay = typeof employee.joiningDate === 'string' ? employee.joiningDate.slice(5, 10) : '';
         const years = employee.joiningDate ? Number(localDate.slice(0,4)) - Number(String(employee.joiningDate).slice(0,4)) : 0;
         let category: 'birthday' | 'anniversary' | null = null;

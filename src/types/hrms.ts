@@ -168,6 +168,10 @@ export interface AttendanceRecord {
   lateMinutes?: number;
   latePenaltyDays?: number;
   earlyDepartureMinutes?: number;
+  overtimeMinutes?: number;
+  isNightShift?: boolean;
+  expectedShiftEndAt?: string;
+  scheduledShiftMinutes?: number;
   officeTimezone?: string;
   correctionId?: string;
   status: AttendanceStatus;

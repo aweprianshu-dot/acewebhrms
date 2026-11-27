@@ -202,10 +202,16 @@ export function getScheduleMetrics(policy: WorkPolicySettings) {
   const startMins = parseHHMMToMinutes(p.workStartTime);
   const endMins = parseHHMMToMinutes(p.workEndTime);
   const lunchStartMins = parseHHMMToMinutes(p.lunchStartTime);
-  const lunchEndMins = parseHHMMToMinutes(p.lunchEndTime);
+  let lunchEndMins = parseHHMMToMinutes(p.lunchEndTime);
+  const overnight = endMins <= startMins;
+  const adjustedEndMins = overnight ? endMins + 1440 : endMins;
+  if (lunchEndMins < lunchStartMins) lunchEndMins += 1440;
 
-  const totalOfficeMinutes = Math.max(0, endMins - startMins);
-  const scheduledLunchMinutes = Math.max(0, lunchEndMins - lunchStartMins) || p.breakMinutes;
+  const totalOfficeMinutes = Math.max(0, adjustedEndMins - startMins);
+  const lunchOverlapsShift = lunchEndMins > startMins && lunchStartMins < adjustedEndMins;
+  const scheduledLunchMinutes = lunchOverlapsShift
+    ? Math.max(0, Math.min(lunchEndMins, adjustedEndMins) - Math.max(lunchStartMins, startMins)) || p.breakMinutes
+    : p.breakMinutes;
   const netWorkingTargetMinutes = Math.max(0, totalOfficeMinutes - scheduledLunchMinutes);
 
   return {
@@ -284,9 +290,14 @@ export function computeShiftWorkingStats(params: {
     : getOfficeNowParts(now, sched.officeTimezone).minutesSinceMidnight;
 
   const netWorkingSeconds = Math.max(0, elapsedTotalSeconds - lunchDeductedSeconds);
-  const targetSecs = sched.netWorkingTargetMinutes * 60;
-  const remainingWorkingSeconds = Math.max(0, targetSecs - netWorkingSeconds);
-  const progressPercent = targetSecs > 0 ? Math.min(100, Math.round((netWorkingSeconds / targetSecs) * 100)) : 0;
+  const targetSecs = record.isNightShift ? 8 * 60 * 60 : sched.netWorkingTargetMinutes * 60;
+  const expectedShiftEndMs = record.isNightShift && record.expectedShiftEndAt ? new Date(record.expectedShiftEndAt).getTime() : 0;
+  const remainingWorkingSeconds = record.isNightShift && expectedShiftEndMs
+    ? Math.max(0, Math.floor((expectedShiftEndMs - now.getTime()) / 1000))
+    : Math.max(0, targetSecs - netWorkingSeconds);
+  const progressPercent = targetSecs > 0
+    ? Math.min(100, Math.round(((record.isNightShift ? elapsedTotalSeconds : netWorkingSeconds) / targetSecs) * 100))
+    : 0;
 
   const lateMinutes =
     typeof record.lateMinutes === 'number'
@@ -296,7 +307,7 @@ export function computeShiftWorkingStats(params: {
   const earlyDepartureMinutes = hasCheckedOut
     ? typeof record.earlyDepartureMinutes === 'number'
       ? record.earlyDepartureMinutes
-      : Math.max(0, sched.endMins - outOfficeMins)
+      : Math.max(0, (sched.endMins <= sched.startMins ? sched.endMins + 1440 : sched.endMins) - (sched.endMins <= sched.startMins && outOfficeMins < sched.startMins ? outOfficeMins + 1440 : outOfficeMins))
     : 0;
 
   return {
