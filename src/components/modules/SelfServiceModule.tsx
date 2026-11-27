@@ -44,6 +44,7 @@ export const SelfServiceModule: React.FC<SelfServiceModuleProps> = ({ onNavigate
     employeeProfile,
     effectiveRole,
     mfaEnrolledFactors,
+    reauthenticateCurrentUser,
     startTotpEnrollment,
     unenrollMfaFactor,
   } = useAuth();
@@ -147,6 +148,21 @@ export const SelfServiceModule: React.FC<SelfServiceModuleProps> = ({ onNavigate
       });
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, 'announcementReads');
+    }
+  };
+
+  const downloadMyPayslip = async (payslip: (typeof myPayslips)[number]) => {
+    const password = window.prompt('For your privacy, re-enter your ACE HRMS password to view and download this payslip.');
+    if (!password) return;
+    try {
+      const result = await reauthenticateCurrentUser(password);
+      if (result.mfaRequired) {
+        window.alert('Your account requires an additional MFA verification. Complete the sign-in security challenge, then try again.');
+        return;
+      }
+      generatePayslipPdf(payslip, companySettings.companyName, companySettings.address);
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'Password verification failed. Please try again.');
     }
   };
 
@@ -584,7 +600,7 @@ export const SelfServiceModule: React.FC<SelfServiceModuleProps> = ({ onNavigate
                     </div>
                     <button
                       type="button"
-                      onClick={() => generatePayslipPdf(ps, companySettings.companyName, companySettings.address)}
+                      onClick={() => void downloadMyPayslip(ps)}
                       className="ace-btn-primary inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg"
                     >
                       <Download className="w-3.5 h-3.5" />
