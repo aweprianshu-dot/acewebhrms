@@ -176,6 +176,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Admin SDK performs a verified-email match and preserves the existing assigned role.
       if (user.emailVerified && user.email) {
         try {
+          // Refresh token claims so the server sees the current verified-email state.
+          await user.getIdToken(true);
           await apiRequest('/api/auth/resolve-role', {
             method: 'POST',
             body: JSON.stringify({}),
