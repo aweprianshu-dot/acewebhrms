@@ -217,7 +217,7 @@ export function getScheduleMetrics(policy: WorkPolicySettings) {
   return {
     ...p,
     startMins,
-    endMins: adjustedEndMins,
+    endMins,
     lunchStartMins,
     lunchEndMins,
     totalOfficeMinutes,
@@ -302,7 +302,7 @@ export function computeShiftWorkingStats(params: {
   const earlyDepartureMinutes = hasCheckedOut
     ? typeof record.earlyDepartureMinutes === 'number'
       ? record.earlyDepartureMinutes
-      : Math.max(0, sched.endMins - outOfficeMins)
+      : Math.max(0, (sched.endMins <= sched.startMins && outOfficeMins < sched.startMins ? outOfficeMins + 1440 : outOfficeMins) - (sched.endMins <= sched.startMins ? sched.endMins + 1440 : sched.endMins))
     : 0;
 
   return {
