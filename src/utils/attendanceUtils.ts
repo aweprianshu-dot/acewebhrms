@@ -202,16 +202,22 @@ export function getScheduleMetrics(policy: WorkPolicySettings) {
   const startMins = parseHHMMToMinutes(p.workStartTime);
   const endMins = parseHHMMToMinutes(p.workEndTime);
   const lunchStartMins = parseHHMMToMinutes(p.lunchStartTime);
-  const lunchEndMins = parseHHMMToMinutes(p.lunchEndTime);
+  let lunchEndMins = parseHHMMToMinutes(p.lunchEndTime);
+  const overnight = endMins <= startMins;
+  const adjustedEndMins = overnight ? endMins + 1440 : endMins;
+  if (lunchEndMins < lunchStartMins) lunchEndMins += 1440;
 
-  const totalOfficeMinutes = Math.max(0, endMins - startMins);
-  const scheduledLunchMinutes = Math.max(0, lunchEndMins - lunchStartMins) || p.breakMinutes;
+  const totalOfficeMinutes = Math.max(0, adjustedEndMins - startMins);
+  const lunchOverlapsShift = lunchEndMins > startMins && lunchStartMins < adjustedEndMins;
+  const scheduledLunchMinutes = lunchOverlapsShift
+    ? Math.max(0, Math.min(lunchEndMins, adjustedEndMins) - Math.max(lunchStartMins, startMins)) || p.breakMinutes
+    : p.breakMinutes;
   const netWorkingTargetMinutes = Math.max(0, totalOfficeMinutes - scheduledLunchMinutes);
 
   return {
     ...p,
     startMins,
-    endMins,
+    endMins: adjustedEndMins,
     lunchStartMins,
     lunchEndMins,
     totalOfficeMinutes,
