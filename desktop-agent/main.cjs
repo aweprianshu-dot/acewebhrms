@@ -1,4 +1,5 @@
 const { app, BrowserWindow, ipcMain, powerMonitor, safeStorage } = require('electron');
+const { autoUpdater } = require('electron-updater');
 const fs = require('node:fs');
 const path = require('node:path');
 const { createAgentController } = require('./agent-core.cjs');
@@ -59,6 +60,15 @@ function createWindow() {
 app.whenReady().then(() => {
   agent.loadAuth();
   createWindow();
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.on('checking-for-update', () => mainWindow?.webContents.send('agent:update-status', { state: 'checking' }));
+  autoUpdater.on('update-available', (info) => mainWindow?.webContents.send('agent:update-status', { state: 'available', version: info.version }));
+  autoUpdater.on('update-not-available', () => mainWindow?.webContents.send('agent:update-status', { state: 'current' }));
+  autoUpdater.on('download-progress', (progress) => mainWindow?.webContents.send('agent:update-status', { state: 'downloading', percent: Math.round(progress.percent) }));
+  autoUpdater.on('update-downloaded', (info) => mainWindow?.webContents.send('agent:update-status', { state: 'downloaded', version: info.version }));
+  autoUpdater.on('error', (error) => mainWindow?.webContents.send('agent:update-status', { state: 'error', message: error.message }));
+  if (app.isPackaged) setTimeout(() => autoUpdater.checkForUpdates().catch(() => {}), 8000);
 });
 app.on('window-all-closed', () => {
   agent.stop();
@@ -83,3 +93,5 @@ ipcMain.handle('agent:stop', async () => {
 });
 ipcMain.handle('agent:withdraw', async () => agent.withdraw());
 ipcMain.handle('agent:status', async () => agent.getStatus());
+
+ipcMain.handle('agent:install-update', async () => { autoUpdater.quitAndInstall(); return { success: true }; });
