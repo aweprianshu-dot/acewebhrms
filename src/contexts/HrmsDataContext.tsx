@@ -278,9 +278,21 @@ export const HrmsDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     };
 
     const reportListenerError = (err: unknown, op: OperationType, path: string) => {
+      const code = (err as { code?: string } | null)?.code || '';
       const msg = err instanceof Error ? err.message : String(err);
-      setDataError(`Unable to sync ${path}: ${msg}`);
       markReady();
+
+      // Permission-denied on optional/background subscriptions must not block the dashboard
+      // or repeatedly display a global red sync banner. Keep a diagnostic for developers;
+      // security rules remain authoritative and this does not grant additional access.
+      if (code === 'permission-denied' || /missing or insufficient permissions/i.test(msg)) {
+        if (import.meta.env.DEV) {
+          console.warn(`[Firestore] Optional subscription denied: ${path} (${effectiveRole || 'unknown role'})`);
+        }
+        return;
+      }
+
+      setDataError(`Unable to sync ${path}: ${msg}`);
       try {
         handleFirestoreError(err, op, path);
       } catch {
