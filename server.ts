@@ -793,7 +793,7 @@ async function startServer() {
         const expectedEndMs = record.isNightShift && record.expectedShiftEndAt ? new Date(String(record.expectedShiftEndAt)).getTime() : 0;
         const earlyDepartureMinutes = expectedEndMs ? Math.max(0, Math.ceil((expectedEndMs - now.getTime()) / 60000)) : Math.max(0, endMinutes - outMinutes);
         const isEarlyDeparture = earlyDepartureMinutes > 0;
-        const overtimeMinutes = record.isNightShift ? Math.max(0, workingMinutes - 480) : 0;
+        const overtimeMinutes = record.isNightShift ? Math.max(0, elapsedMinutes - 480) : 0;
         const status = resolveCheckoutStatus({
           currentStatus: String(record.status || 'present'),
           workingMinutes,
