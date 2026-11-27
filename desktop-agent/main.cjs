@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, powerMonitor, safeStorage } = require('electron');
+const { app, BrowserWindow, ipcMain, powerMonitor, safeStorage, nativeImage } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -25,8 +25,19 @@ const agent = createAgentController({
   fetchImpl: (...args) => fetch(...args),
   captureScreenshot: async () => {
     const screenshotDesktop = (await import('screenshot-desktop')).default;
-    // JPEG greatly reduces capture size so uploads stay under the server's 5 MB limit.
-    return screenshotDesktop({ format: 'jpg' });
+    const raw = await screenshotDesktop({ format: 'jpg' });
+    // Keep the Firestore fallback below its 1 MiB document limit.
+    const image = nativeImage.createFromBuffer(raw);
+    const resized = image.resize({ width: 1600, height: 900, quality: 'good' });
+    let compressed = resized.toJPEG(55);
+    if (compressed.length > 650 * 1024) compressed = resized.toJPEG(40);
+    if (compressed.length > 650 * 1024) {
+      compressed = image.resize({ width: 1280, height: 720, quality: 'good' }).toJPEG(32);
+    }
+    if (compressed.length > 650 * 1024) {
+      throw new Error('Screenshot is too large after compression; capture was skipped safely.');
+    }
+    return compressed;
   },
   getActiveWindow: async () => {
     const activeWinModule = await import('active-win');
