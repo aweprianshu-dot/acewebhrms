@@ -1178,7 +1178,7 @@ service cloud.firestore {
 
     match /announcements/{announcementId} {
       allow get: if isActiveMember() && isValidId(announcementId) && canReadAnnouncement(resource.data);
-      allow list: if isActiveMember() && resource.data.id is string && canReadAnnouncement(resource.data);
+      allow list: if isActiveMember() && canReadAnnouncement(resource.data);
       allow create: if isActiveMember() && isValidId(announcementId)
         && isValidAnnouncement(incoming())
         && isValidTimestampCreate()
