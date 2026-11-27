@@ -145,6 +145,7 @@ export const MonitoringModule: React.FC = () => {
         apps.set(app, (apps.get(app) || 0) + gapSeconds);
       }
     });
+    const byDate = new Map<string, { count: number; activitySum: number; idleSeconds: number }>();
     visible.forEach((s) => {
       const day = s.date || (s.capturedAt ? s.capturedAt.slice(0, 10) : 'Unknown');
       const prev = byDate.get(day) || { count: 0, activitySum: 0, idleSeconds: 0 };
