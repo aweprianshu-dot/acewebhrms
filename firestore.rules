@@ -860,7 +860,7 @@ service cloud.firestore {
 
     match /departments/{departmentId} {
       allow get: if isActiveMember() && isValidId(departmentId);
-      allow list: if isActiveMember() && (resource.data.id is string || resource.data.name is string);
+      allow list: if isActiveMember();
       allow create: if (isHR() || isSuperAdmin()) && isValidId(departmentId)
         && isValidDepartment(incoming())
         && isValidTimestampCreate()
@@ -874,7 +874,7 @@ service cloud.firestore {
 
     match /designations/{designationId} {
       allow get: if isActiveMember() && isValidId(designationId);
-      allow list: if isActiveMember() && resource.data.id is string;
+      allow list: if isActiveMember();
       allow create: if (isHR() || isSuperAdmin()) && isValidId(designationId)
         && isValidDesignation(incoming())
         && isValidTimestampCreate()
@@ -962,7 +962,7 @@ service cloud.firestore {
 
     match /holidays/{holidayId} {
       allow get: if isActiveMember() && isValidId(holidayId);
-      allow list: if isActiveMember() && resource.data.id is string;
+      allow list: if isActiveMember();
       allow create: if (isHR() || isSuperAdmin()) && isValidId(holidayId)
         && isValidHoliday(incoming())
         && isValidTimestampCreate()
@@ -1046,7 +1046,7 @@ service cloud.firestore {
 
     match /jobs/{jobId} {
       allow get: if isActiveMember() && isValidId(jobId);
-      allow list: if isActiveMember() && resource.data.id is string;
+      allow list: if isActiveMember();
       allow create: if (isHR() || isSuperAdmin()) && isValidId(jobId)
         && isValidJobOpening(incoming())
         && isValidTimestampCreate()
@@ -1642,7 +1642,7 @@ service cloud.firestore {
     }
 
     match /shiftTemplates/{templateId} {
-      allow get, list: if isActiveMember() && isValidId(templateId);
+      allow get, list: if isActiveMember();
       allow create: if (isSuperAdmin() || isHR()) && isValidId(templateId)
         && incoming().id == templateId
         && incoming().name is string && incoming().name.size() >= 2 && incoming().name.size() <= 100
@@ -1670,7 +1670,7 @@ service cloud.firestore {
     }
 
     match /reviewCycles/{cycleId} {
-      allow get, list: if isActiveMember() && isValidId(cycleId);
+      allow get, list: if isActiveMember();
       allow create: if (isSuperAdmin() || isHR()) && isValidId(cycleId)
         && incoming().id == cycleId
         && incoming().name is string && incoming().name.size() >= 2 && incoming().name.size() <= 120
