@@ -1015,6 +1015,13 @@ async function startServer() {
         activityPercent: Math.max(0, Math.min(100, Number(req.body?.activityPercent || 0))),
         createdAt: FieldValue.serverTimestamp(),
       });
+      // Keep the live agent row useful even before an admin opens the screenshot gallery.
+      await adminDb.collection('monitoringAgentStatus').doc(uid).set({
+        uid, employeeName: employee.employeeName, departmentId: employee.departmentId,
+        date, lastScreenshotAt: now.toISOString(), lastScreenshotId: snapshotId,
+        lastHeartbeat: now.toISOString(), state: 'monitoring',
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
       res.json({ success: true, snapshotId, capturedAt: now.toISOString() });
     } catch (error) {
       const iamBlocked = isPermissionDeniedError(error);
