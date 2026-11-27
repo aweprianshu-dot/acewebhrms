@@ -24,7 +24,8 @@ const agent = createAgentController({
   fetchImpl: (...args) => fetch(...args),
   captureScreenshot: async () => {
     const screenshotDesktop = (await import('screenshot-desktop')).default;
-    return screenshotDesktop({ format: 'png' });
+    // JPEG greatly reduces capture size so uploads stay under the server's 5 MB limit.
+    return screenshotDesktop({ format: 'jpg' });
   },
   getActiveWindow: async () => {
     const activeWinModule = await import('active-win');
