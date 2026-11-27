@@ -175,6 +175,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // 2. Check /roles/{uid}
       const roleRef = doc(db, 'roles', user.uid);
       const roleSnap = await getDoc(roleRef);
+      // Recover legacy role records whose document ID casing differs from Firebase Auth UID.
+      // The rules only allow querying the signed-in user's exact email and migrating an active employee role.
+      const legacyRolesSnap = !roleSnap.exists() && user.email
+        ? await getDocs(query(collection(db, 'roles'), where('email', '==', user.email)))
+        : null;
+      const legacyRoleDoc = legacyRolesSnap?.docs.find((candidate) =>
+        candidate.id !== user.uid &&
+        candidate.data().email === user.email &&
+        candidate.data().role === 'employee' &&
+        candidate.data().status === 'active'
+      );
 
       if (!roleSnap.exists()) {
         if (isExistingAdminOrOwner) {
@@ -308,6 +319,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
           const refreshedRoleSnap = await getDoc(roleRef);
           setRoleAssignment(refreshedRoleSnap.exists() ? (refreshedRoleSnap.data() as RoleAssignment) : null);
+        } else if (legacyRoleDoc) {
+          // Migrate only an already-active employee record with the same verified email.
+          // Keep the legacy document untouched for audit/rollback.
+          const legacyData = legacyRoleDoc.data();
+          await setDoc(roleRef, {
+            ...legacyData,
+            uid: user.uid,
+            email: user.email || '',
+            role: 'employee',
+            status: 'active',
+            legacyRoleDocId: legacyRoleDoc.id,
+            createdAt: legacyData.createdAt || serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+          const migratedRoleSnap = await getDoc(roleRef);
+          setRoleAssignment(migratedRoleSnap.exists() ? (migratedRoleSnap.data() as RoleAssignment) : null);
         } else if (!setupData && !orgExists) {
           // Truly uninitialized workspace with no existing WorkFlow OS org or admin
           setNeedsInitialSetup(true);
