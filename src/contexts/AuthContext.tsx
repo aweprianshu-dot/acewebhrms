@@ -172,7 +172,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const isExistingAdminOrOwner = Boolean(adminSnap?.exists()) || emailLower === 'awe.prianshu@gmail.com';
       setSystemSetup(setupData);
 
-      // 2. Check /roles/{uid}
+      // 2. Canonicalize legacy role records server-side before client Firestore reads.
+      // Admin SDK performs a verified-email match and preserves the existing assigned role.
+      if (user.emailVerified && user.email) {
+        try {
+          await apiRequest('/api/auth/resolve-role', {
+            method: 'POST',
+            body: JSON.stringify({}),
+          });
+        } catch (roleResolveError) {
+          console.error('[HRMS role resolution] Server-side recovery failed:', roleResolveError);
+        }
+      }
+
+      // Check /roles/{uid} after the server-side recovery attempt.
       const roleRef = doc(db, 'roles', user.uid);
       const roleSnap = await getDoc(roleRef);
       // Recover legacy role records whose document ID casing differs from Firebase Auth UID.
