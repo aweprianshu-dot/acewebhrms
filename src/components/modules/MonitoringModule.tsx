@@ -134,10 +134,18 @@ export const MonitoringModule: React.FC = () => {
 
   const analytics = useMemo(() => {
     const apps = new Map<string, number>();
-    const byDate = new Map<string, { count: number; activitySum: number; idleSeconds: number }>();
-
+    const chronological = [...visible].sort((a, b) => a.uid.localeCompare(b.uid) || new Date(a.capturedAt).getTime() - new Date(b.capturedAt).getTime());
+    chronological.forEach((sample, index) => {
+      const next = chronological[index + 1];
+      if (!next || next.uid !== sample.uid || (next.activeApp || 'Unknown') !== (sample.activeApp || 'Unknown')) return;
+      const gapSeconds = Math.floor((new Date(next.capturedAt).getTime() - new Date(sample.capturedAt).getTime()) / 1000);
+      // Estimate continuity only when two consecutive samples show the same app; never extrapolate across long gaps.
+      if (gapSeconds > 0 && gapSeconds <= 15 * 60) {
+        const app = sample.activeApp || 'Unknown';
+        apps.set(app, (apps.get(app) || 0) + gapSeconds);
+      }
+    });
     visible.forEach((s) => {
-      apps.set(s.activeApp || 'Unknown', (apps.get(s.activeApp || 'Unknown') || 0) + 1);
       const day = s.date || (s.capturedAt ? s.capturedAt.slice(0, 10) : 'Unknown');
       const prev = byDate.get(day) || { count: 0, activitySum: 0, idleSeconds: 0 };
       byDate.set(day, {
@@ -268,7 +276,7 @@ export const MonitoringModule: React.FC = () => {
             <Activity size={17} className="text-[#FF6A33]" /> Sampled Productivity Trend & App Summary
           </h2>
           <p className="text-xs text-[#A1A1AA] mt-1">
-            Based on captured samples only; not a continuous recording or standalone performance score.
+            App time is an estimate only where consecutive samples show the same app (maximum 15-minute gap); this is not continuous recording or a standalone performance score.
           </p>
         </div>
 
@@ -284,10 +292,10 @@ export const MonitoringModule: React.FC = () => {
           <div className="rounded-xl bg-[#0B0D12] border border-[#292D36] p-3.5">
             <div className="text-xs text-[#A1A1AA] mb-1">Top active apps</div>
             {analytics.topApps.length ? (
-              analytics.topApps.map(([app, count]) => (
+              analytics.topApps.map(([app, seconds]) => (
                 <div key={app} className="flex justify-between text-xs mt-1 text-[#D4D4D8]">
                   <span className="truncate">{app}</span>
-                  <b className="text-[#FFFFFF]">{count}</b>
+                  <b className="text-[#FFFFFF]">{Math.round(seconds / 60)}m est.</b>
                 </div>
               ))
             ) : (
