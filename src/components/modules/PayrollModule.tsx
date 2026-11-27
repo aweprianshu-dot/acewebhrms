@@ -69,7 +69,9 @@ export const PayrollModule: React.FC = () => {
         workEndTime: emp.shiftEndTime || workPolicy.workEndTime,
       }).netWorkingTargetMinutes;
       const overtimeHours = empAtt.reduce((sum, a) => {
-        const extraMins = Math.max(0, (a.workingMinutes || 0) - employeeShiftTarget);
+        const extraMins = typeof a.overtimeMinutes === 'number'
+          ? Math.max(0, a.overtimeMinutes)
+          : Math.max(0, (a.workingMinutes || 0) - employeeShiftTarget);
         return sum + extraMins / 60;
       }, 0);
 
