@@ -255,6 +255,43 @@ export const MonitoringModule: React.FC = () => {
         </div>
       </div>
 
+      <section className="rounded-2xl border border-[#343A46] bg-[#151922] p-5 space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="font-semibold text-[#FFFFFF]">Connected Employees</h2>
+            <p className="text-xs text-[#A1A1AA] mt-1">Live agent heartbeat and most recent screenshot for each employee who has connected the agent.</p>
+          </div>
+          <span className="text-xs text-[#A1A1AA]">{agentStatuses.length} registered agent(s)</span>
+        </div>
+        {agentStatuses.length ? (
+          <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-2">
+            {[...agentStatuses].sort((a,b) => (a.employeeName || a.uid).localeCompare(b.employeeName || b.uid)).map((agent) => {
+              const online = isMonitoringAgentOnline(agent);
+              return (
+                <article key={agent.uid} className="rounded-xl border border-[#292D36] bg-[#0B0D12] p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="font-semibold text-sm text-[#FFFFFF] truncate">{agent.employeeName || 'Employee name unavailable'}</div>
+                      <div className="text-[10px] text-[#A1A1AA] truncate">{agent.uid}</div>
+                    </div>
+                    <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold ${online ? 'bg-emerald-500/10 text-emerald-400' : 'bg-zinc-500/10 text-zinc-400'}`}>
+                      {online ? 'ONLINE' : 'OFFLINE'}
+                    </span>
+                  </div>
+                  <div className="mt-3 space-y-1 text-[11px] text-[#A1A1AA]">
+                    <div>Last seen: <span className="text-[#D4D4D8]">{agent.lastHeartbeat || agent.lastHeartbeatAt ? new Date(agent.lastHeartbeat || agent.lastHeartbeatAt || '').toLocaleString() : 'Not yet reported'}</span></div>
+                    <div>Last screenshot: <span className="text-[#D4D4D8]">{agent.lastScreenshotAt ? new Date(agent.lastScreenshotAt).toLocaleString() : 'No screenshot uploaded yet'}</span></div>
+                    <div>Agent state: <span className="text-[#D4D4D8]">{agent.state || 'Unknown'}</span></div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="rounded-xl bg-[#0B0D12] p-4 text-sm text-[#A1A1AA]">No employee agent has sent a heartbeat yet. Sign in to the desktop agent with the employee's verified HRMS account and start it during a checked-in shift.</p>
+        )}
+      </section>
+
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
         <input
           value={filter}
