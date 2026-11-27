@@ -973,7 +973,6 @@ async function startServer() {
   app.post('/api/monitoring/snapshot', requireAuth, async (req: AuthenticatedRequest, res) => {
     try {
       if (!req.user?.emailVerified) { res.status(403).json({ error: 'Verified email required.' }); return; }
-      if (!adminBucket) { res.status(503).json({ error: 'Firebase Storage bucket is not configured for the monitoring agent.' }); return; }
       const uid = req.user.uid;
       const employee = await loadActiveEmployee(uid, req.user.email);
       const consentSnap = await adminDb.collection('monitoringConsents').doc(uid).get();
@@ -998,22 +997,43 @@ async function startServer() {
       }
       const encoded = String(req.body?.screenshotBase64 || '');
       const screenshotMimeType = String(req.body?.screenshotMimeType || 'image/png');
-      if (!encoded || encoded.length > 7_000_000 || !/^[A-Za-z0-9+/]+={0,2}$/.test(encoded)) {
-        res.status(400).json({ error: 'Invalid or oversized screenshot payload.' }); return;
+      if (!encoded || encoded.length > 950_000 || !/^[A-Za-z0-9+/]+={0,2}$/.test(encoded)) {
+        res.status(400).json({ error: 'Invalid or oversized screenshot payload. The agent must send a compressed JPEG.' }); return;
       }
-      if (!['image/png', 'image/jpeg'].includes(screenshotMimeType)) {
-        res.status(400).json({ error: 'Unsupported screenshot format.' }); return;
+      if (!['image/jpeg'].includes(screenshotMimeType)) {
+        res.status(400).json({ error: 'Only compressed JPEG screenshots are accepted.' }); return;
       }
       const bytes = Buffer.from(encoded, 'base64');
-      if (bytes.length > 5 * 1024 * 1024) { res.status(413).json({ error: 'Screenshot exceeds the 5 MB limit. Agent should send a compressed JPEG.' }); return; }
+      // Firestore document limit is 1 MiB; leave headroom for metadata.
+      if (bytes.length > 650 * 1024) { res.status(413).json({ error: 'Compressed screenshot exceeds the 650 KB safe limit.' }); return; }
       const snapshotId = `shot_${uid}_${now.getTime()}`.replace(/[^a-zA-Z0-9_-]/g,'_').slice(0,128);
-      const extension = screenshotMimeType === 'image/jpeg' ? 'jpg' : 'png';
+      const extension = 'jpg';
       const storagePath = `monitoring/${uid}/${shiftDate}/${snapshotId}.${extension}`;
-      const file = adminBucket.file(storagePath);
-      await file.save(bytes, { resumable: false, contentType: screenshotMimeType, metadata: { metadata: { employeeUid: uid, snapshotId } } });
+      let storedInBucket = false;
+      if (adminBucket) {
+        try {
+          await adminBucket.file(storagePath).save(bytes, {
+            resumable: false,
+            contentType: screenshotMimeType,
+            metadata: { metadata: { employeeUid: uid, snapshotId } },
+          });
+          storedInBucket = true;
+        } catch (storageError) {
+          console.error('[Monitoring] Firebase Storage upload failed; using Firestore image fallback:', storageError instanceof Error ? storageError.message : storageError);
+        }
+      }
+      if (!storedInBucket) {
+        // Fallback keeps screenshots working even when Firebase Storage is not enabled/billable.
+        await adminDb.collection('monitoringScreenshotBlobs').doc(snapshotId).set({
+          uid, snapshotId, mimeType: screenshotMimeType, imageBase64: encoded,
+          createdAt: FieldValue.serverTimestamp(),
+        });
+      }
       await adminDb.collection('monitoringSnapshots').doc(snapshotId).set({
         id: snapshotId, uid, employeeName: employee.employeeName, departmentId: employee.departmentId,
-        date: shiftDate, capturedAt: now.toISOString(), timestampMs: now.getTime(), storagePath,
+        date: shiftDate, capturedAt: now.toISOString(), timestampMs: now.getTime(),
+        storagePath: storedInBucket ? storagePath : null,
+        imageBackend: storedInBucket ? 'firebase-storage' : 'firestore-fallback',
         activeApp: String(req.body?.activeApp || 'Unknown').slice(0,160),
         windowTitle: String(req.body?.windowTitle || '').slice(0,300),
         idleSeconds: Math.max(0, Math.min(86400, Number(req.body?.idleSeconds || 0))),
@@ -1047,8 +1067,16 @@ async function startServer() {
         || (['dept_manager', 'team_lead'].includes(String(role?.role)) && role?.departmentId === snapshot.departmentId)
         || snapshot.uid === req.user.uid;
       if (!role || role.status !== 'active' || !isManager) { res.status(403).json({ error: 'You are not allowed to view this employee screenshot.' }); return; }
-      if (!adminBucket) { res.status(503).json({ error: 'Firebase Storage bucket is not configured.' }); return; }
-      const [url] = await adminBucket.file(String(snapshot.storagePath)).getSignedUrl({ action: 'read', expires: Date.now() + 60 * 60 * 1000 });
+      let url: string;
+      if (snapshot.storagePath && adminBucket) {
+        const [signedUrl] = await adminBucket.file(String(snapshot.storagePath)).getSignedUrl({ action: 'read', expires: Date.now() + 60 * 60 * 1000 });
+        url = signedUrl;
+      } else {
+        const blobSnap = await adminDb.collection('monitoringScreenshotBlobs').doc(snapshotId).get();
+        const blob = blobSnap.data();
+        if (!blob?.imageBase64) { res.status(404).json({ error: 'Screenshot image data not found.' }); return; }
+        url = `data:${String(blob.mimeType || 'image/jpeg')};base64,${String(blob.imageBase64)}`;
+      }
       const auditId = `screenshot_view_${req.user.uid}_${Date.now()}`.slice(0,128);
       await adminDb.collection('auditLogs').doc(auditId).set({
         id: auditId, actorUid: req.user.uid, actorEmail: req.user.email || '', actorRole: String(role.role),
