@@ -884,7 +884,7 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ onNavigate }) 
   return (
     <div className="space-y-6">
       {/* Error Recovery Banner */}
-      {dataError && (
+      {dataError && !/permission-denied|missing or insufficient permissions|insufficient permissions/i.test(dataError) && (
         <div
           role="alert"
           className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-200"
