@@ -180,12 +180,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const legacyRolesSnap = !roleSnap.exists() && user.email
         ? await getDocs(query(collection(db, 'roles'), where('email', '==', user.email)))
         : null;
-      const legacyRoleDoc = legacyRolesSnap?.docs.find((candidate) =>
-        candidate.id !== user.uid &&
-        candidate.data().email === user.email &&
-        candidate.data().role === 'employee' &&
-        candidate.data().status === 'active'
-      );
+      const legacyRoleDoc = legacyRolesSnap?.docs.find((candidate) => {
+        const data = candidate.data();
+        return candidate.id !== user.uid &&
+          data.email === user.email &&
+          ['employee', 'team_lead', 'dept_manager', 'hr_manager', 'super_admin'].includes(data.role) &&
+          data.status === 'active' &&
+          data.uid === candidate.id;
+      });
 
       if (!roleSnap.exists()) {
         if (isExistingAdminOrOwner) {
@@ -327,8 +329,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             ...legacyData,
             uid: user.uid,
             email: user.email || '',
-            role: 'employee',
-            status: 'active',
+            role: legacyData.role,
+            status: legacyData.status,
             legacyRoleDocId: legacyRoleDoc.id,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
