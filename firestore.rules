@@ -110,7 +110,8 @@ service cloud.firestore {
         && (!('departmentId' in data) || (data.departmentId is string && data.departmentId.size() <= 128))
         && (!('teamId' in data) || (data.teamId is string && data.teamId.size() <= 128))
         && (!('teamLeadUid' in data) || (data.teamLeadUid is string && data.teamLeadUid.size() <= 128))
-        && (!('inviteId' in data) || (data.inviteId is string && data.inviteId.size() <= 128));
+        && (!('inviteId' in data) || (data.inviteId is string && data.inviteId.size() <= 128))
+        && (!('legacyRoleDocId' in data) || (data.legacyRoleDocId is string && data.legacyRoleDocId.size() <= 128));
     }
 
     function isValidUserAccount(data) {
@@ -694,7 +695,9 @@ service cloud.firestore {
 
     match /roles/{uid} {
       allow get: if isSignedIn() && isValidId(uid) && (request.auth.uid == uid || isHR() || isSuperAdmin());
-      allow list: if isSuperAdmin() || isHR();
+      // Employees may only query their own role record by their verified email for safe UID-case recovery.
+      allow list: if isSuperAdmin() || isHR() ||
+        (isVerified() && resource.data.email == request.auth.token.email);
       allow create: if isVerified() && isValidId(uid)
         && isValidRoleAssignment(incoming())
         && isValidTimestampCreate()
@@ -710,7 +713,18 @@ service cloud.firestore {
             && incoming().role == get(/databases/$(database)/documents/invitations/$(incoming().inviteId)).data.role
             && incoming().status == 'active'
             && getAfter(/databases/$(database)/documents/invitations/$(incoming().inviteId)).data.status == 'accepted') ||
-          (uid == request.auth.uid && incoming().role == 'employee' && incoming().status == 'pending')
+          (uid == request.auth.uid && incoming().role == 'employee' && incoming().status == 'pending') ||
+          // Safe recovery: only migrate an existing active employee record for this verified email.
+          (uid == request.auth.uid &&
+            incoming().role == 'employee' &&
+            incoming().status == 'active' &&
+            incoming().email == request.auth.token.email &&
+            'legacyRoleDocId' in incoming() &&
+            isValidId(incoming().legacyRoleDocId) &&
+            exists(/databases/$(database)/documents/roles/$(incoming().legacyRoleDocId)) &&
+            get(/databases/$(database)/documents/roles/$(incoming().legacyRoleDocId)).data.email == request.auth.token.email &&
+            get(/databases/$(database)/documents/roles/$(incoming().legacyRoleDocId)).data.role == 'employee' &&
+            get(/databases/$(database)/documents/roles/$(incoming().legacyRoleDocId)).data.status == 'active')
         );
       allow update: if isVerified() && isValidId(uid)
         && isValidRoleAssignment(incoming())
