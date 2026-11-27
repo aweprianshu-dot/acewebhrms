@@ -1156,6 +1156,102 @@ async function startServer() {
     attachmentName: z.string().max(200).optional(),
   });
 
+  // Resolve legacy role documents whose Firestore document ID differs only by UID casing.
+  // The caller must present a valid Firebase ID token and a verified email.
+  app.post('/api/auth/resolve-role', requireAuth, async (req: AuthenticatedRequest, res) => {
+    try {
+      const user = req.user!;
+      if (!user.email || user.emailVerified !== true) {
+        res.status(403).json({ error: 'A verified Firebase email is required to resolve the HRMS role.' });
+        return;
+      }
+
+      const rolesRef = adminDb.collection('roles');
+      const canonicalRef = rolesRef.doc(user.uid);
+      const canonicalSnap = await canonicalRef.get();
+      if (canonicalSnap.exists) {
+        res.json({ success: true, migrated: false, role: canonicalSnap.data() });
+        return;
+      }
+
+      const email = user.email.trim();
+      const emailLower = email.toLowerCase();
+      const [exactSnap, lowerSnap] = await Promise.all([
+        rolesRef.where('email', '==', email).get(),
+        emailLower === email ? Promise.resolve(null) : rolesRef.where('email', '==', emailLower).get(),
+      ]);
+
+      const candidates = new Map<string, FirebaseFirestore.QueryDocumentSnapshot>();
+      for (const snap of [exactSnap, lowerSnap]) {
+        snap?.docs.forEach((candidate) => candidates.set(candidate.id, candidate));
+      }
+
+      const allowedRoles = new Set(['employee', 'team_lead', 'dept_manager', 'hr_manager', 'super_admin']);
+      const validCandidates = Array.from(candidates.values()).filter((candidate) => {
+        const data = candidate.data();
+        return candidate.id !== user.uid &&
+          typeof data.uid === 'string' && data.uid === candidate.id &&
+          typeof data.email === 'string' && data.email.toLowerCase() === emailLower &&
+          allowedRoles.has(data.role) &&
+          ['active', 'pending', 'inactive'].includes(data.status);
+      });
+
+      if (validCandidates.length === 0) {
+        res.json({ success: true, migrated: false, role: null, reason: 'No matching legacy role document.' });
+        return;
+      }
+
+      const activeCandidates = validCandidates.filter((candidate) => candidate.data().status === 'active');
+      const selected = activeCandidates.length === 1
+        ? activeCandidates[0]
+        : activeCandidates.length > 1
+          ? null
+          : validCandidates.length === 1
+            ? validCandidates[0]
+            : null;
+
+      if (!selected) {
+        res.status(409).json({ error: 'Multiple legacy role records match this account. Manual HR review is required.' });
+        return;
+      }
+
+      const legacyData = selected.data();
+      await adminDb.runTransaction(async (transaction) => {
+        const currentCanonical = await transaction.get(canonicalRef);
+        if (currentCanonical.exists) return;
+        const currentLegacy = await transaction.get(selected.ref);
+        if (!currentLegacy.exists) throw new Error('Legacy role record changed during migration.');
+        const latest = currentLegacy.data()!;
+        if (
+          latest.uid !== selected.id ||
+          typeof latest.email !== 'string' ||
+          latest.email.toLowerCase() !== emailLower ||
+          latest.role !== legacyData.role ||
+          latest.status !== legacyData.status
+        ) {
+          throw new Error('Legacy role record no longer matches the authenticated account.');
+        }
+        transaction.create(canonicalRef, {
+          ...latest,
+          uid: user.uid,
+          email,
+          legacyRoleDocId: selected.id,
+          createdAt: latest.createdAt || FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      });
+
+      const migratedSnap = await canonicalRef.get();
+      res.json({ success: true, migrated: migratedSnap.exists, role: migratedSnap.data() || null });
+    } catch (error) {
+      console.error('[Auth role resolution] Failed:', error instanceof Error ? error.message : 'Unknown error');
+      res.status(500).json({
+        error: 'Unable to resolve the HRMS role record.',
+        details: error instanceof Error ? error.message : 'Unknown server error',
+      });
+    }
+  });
+
   app.post('/api/leaves/ensure-balance', requireAuth, async (req: AuthenticatedRequest, res) => {
     try {
       const result = await ensureEmployeeLeaveBalance(adminLeaveStore, req.user!);
