@@ -997,15 +997,20 @@ async function startServer() {
         res.status(409).json({ error: 'Monitoring pauses during recorded breaks.' }); return;
       }
       const encoded = String(req.body?.screenshotBase64 || '');
+      const screenshotMimeType = String(req.body?.screenshotMimeType || 'image/png');
       if (!encoded || encoded.length > 7_000_000 || !/^[A-Za-z0-9+/]+={0,2}$/.test(encoded)) {
         res.status(400).json({ error: 'Invalid or oversized screenshot payload.' }); return;
       }
+      if (!['image/png', 'image/jpeg'].includes(screenshotMimeType)) {
+        res.status(400).json({ error: 'Unsupported screenshot format.' }); return;
+      }
       const bytes = Buffer.from(encoded, 'base64');
-      if (bytes.length > 5 * 1024 * 1024) { res.status(413).json({ error: 'Screenshot exceeds the 5 MB limit.' }); return; }
+      if (bytes.length > 5 * 1024 * 1024) { res.status(413).json({ error: 'Screenshot exceeds the 5 MB limit. Agent should send a compressed JPEG.' }); return; }
       const snapshotId = `shot_${uid}_${now.getTime()}`.replace(/[^a-zA-Z0-9_-]/g,'_').slice(0,128);
-      const storagePath = `monitoring/${uid}/${shiftDate}/${snapshotId}.png`;
+      const extension = screenshotMimeType === 'image/jpeg' ? 'jpg' : 'png';
+      const storagePath = `monitoring/${uid}/${shiftDate}/${snapshotId}.${extension}`;
       const file = adminBucket.file(storagePath);
-      await file.save(bytes, { resumable: false, contentType: 'image/png', metadata: { metadata: { employeeUid: uid, snapshotId } } });
+      await file.save(bytes, { resumable: false, contentType: screenshotMimeType, metadata: { metadata: { employeeUid: uid, snapshotId } } });
       await adminDb.collection('monitoringSnapshots').doc(snapshotId).set({
         id: snapshotId, uid, employeeName: employee.employeeName, departmentId: employee.departmentId,
         date: shiftDate, capturedAt: now.toISOString(), timestampMs: now.getTime(), storagePath,
