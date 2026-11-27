@@ -330,7 +330,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             role: 'employee',
             status: 'active',
             legacyRoleDocId: legacyRoleDoc.id,
-            createdAt: legacyData.createdAt || serverTimestamp(),
+            createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
           });
           const migratedRoleSnap = await getDoc(roleRef);
