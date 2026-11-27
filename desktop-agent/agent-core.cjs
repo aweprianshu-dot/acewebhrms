@@ -209,7 +209,7 @@ function createAgentController(deps) {
 
     const snapshotBody = {
       mode,
-      ...(screenshotBase64 ? { screenshotBase64 } : {}),
+      ...(screenshotBase64 ? { screenshotBase64, screenshotMimeType: 'image/jpeg' } : {}),
       activeApp: activeWindow?.owner?.name || 'Unknown',
       windowTitle: activeWindow?.title || '',
       idleSeconds,
