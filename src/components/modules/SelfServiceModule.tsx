@@ -151,8 +151,9 @@ export const SelfServiceModule: React.FC<SelfServiceModuleProps> = ({ onNavigate
     }
   };
 
-  const downloadMyPayslip = async (payslip: (typeof myPayslips)[number]) => {
-    const password = window.prompt('For your privacy, re-enter your ACE HRMS password to view and download this payslip.');
+  const [payrollUnlocked, setPayrollUnlocked] = useState(false);
+  const unlockMyPayroll = async () => {
+    const password = window.prompt('Enter your ACE HRMS account password to view your payslips.');
     if (!password) return;
     try {
       const result = await reauthenticateCurrentUser(password);
@@ -160,10 +161,14 @@ export const SelfServiceModule: React.FC<SelfServiceModuleProps> = ({ onNavigate
         window.alert('Your account requires an additional MFA verification. Complete the sign-in security challenge, then try again.');
         return;
       }
-      generatePayslipPdf(payslip, companySettings.companyName, companySettings.address);
+      setPayrollUnlocked(true);
     } catch (error) {
       window.alert(error instanceof Error ? error.message : 'Password verification failed. Please try again.');
     }
+  };
+  const downloadMyPayslip = (payslip: (typeof myPayslips)[number]) => {
+    if (!payrollUnlocked) return;
+    generatePayslipPdf(payslip, companySettings.companyName, companySettings.address);
   };
 
   const [docTitle, setDocTitle] = useState('');
@@ -586,7 +591,14 @@ export const SelfServiceModule: React.FC<SelfServiceModuleProps> = ({ onNavigate
 
           <div className="bg-[#151922] border border-[#292D36] rounded-2xl p-5">
             <h2 className="font-display text-base font-semibold text-[#FFFFFF] mb-3">My Payslips</h2>
-            {myPayslips.length === 0 ? (
+            {!payrollUnlocked ? (
+              <div className="rounded-xl border border-[#292D36] bg-[#1B1F28] p-4">
+                <p className="text-xs text-[#A1A1AA] mb-3">Payslip details and net salary stay hidden until you verify your account password.</p>
+                <button type="button" onClick={() => void unlockMyPayroll()} className="ace-btn-primary inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold">
+                  <KeyRound className="w-3.5 h-3.5" /> Verify Password to View
+                </button>
+              </div>
+            ) : myPayslips.length === 0 ? (
               <p className="text-xs text-[#A1A1AA]">No payslips issued for your account yet.</p>
             ) : (
               <div className="space-y-2.5">
